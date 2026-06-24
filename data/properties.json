@@ -1,0 +1,11 @@
+// data/properties.json
+[
+  {
+    "id": 1,
+    "name": "東京みらい不動産 - サンプル物件",
+    "slug": "sample-property",
+    "address": "東京都千代田区丸の内1-1-1",
+    "description": "モデルルームとして使用できる素晴らしい物件です。",
+    "images": []
+  }
+]

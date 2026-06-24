@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 100" width="420" height="100">
+  <!-- Symbol Mark -->
+  <!-- Navy blue rectangle top-left -->
+  <rect x="10" y="10" width="55" height="42" rx="0" fill="#1b6087"/>
+  <!-- Navy blue curved hook bottom-left -->
+  <path d="M 10 52 C 10 52 18 58 20 70 C 22 82 14 92 10 96 C 14 88 22 80 28 74 C 22 78 16 84 10 96 Z" fill="#1b6087"/>
+  <!-- Green sweeping blade right -->
+  <path d="M 35 96 C 45 78 62 44 78 10 C 76 28 66 62 50 90 C 46 94 40 96 35 96 Z" fill="#2a9068"/>
+
+  <!-- Text part -->
+  <!-- 株式会社 -->
+  <text x="96" y="38" font-family="'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="600" fill="#1a1a1a" letter-spacing="2">株式会社</text>
+  <!-- 東京みらい不動産 -->
+  <text x="94" y="82" font-family="'Helvetica Neue', Arial, sans-serif" font-size="34" font-weight="800" fill="#111111" letter-spacing="-0.5">東京みらい不動産</text>
+</svg>

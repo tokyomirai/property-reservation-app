@@ -3,29 +3,43 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Property, getProperties, initializeData } from '../../utils/mockData';
+
+interface Property {
+  id: string;
+  name: string;
+  address: string;
+  salesStatus: string;
+  viewingStatus: string;
+  isPublished: boolean;
+  hasSlippers: string;
+  hasSignboard: string;
+  notes: string;
+}
 
 export default function BrokerPage() {
   const [properties, setProperties] = useState<Property[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [reservationIdInput, setReservationIdInput] = useState('');
   const router = useRouter();
 
   useEffect(() => {
-    initializeData();
-    setProperties(getProperties());
+    fetch('/api/properties')
+      .then((res) => res.json())
+      .then((data) => {
+        setProperties(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Failed to fetch properties:', err);
+        setLoading(false);
+      });
   }, []);
 
   const handleSearchReservation = (e: React.FormEvent) => {
     e.preventDefault();
     if (!reservationIdInput.trim()) return;
-    
-    let targetId = reservationIdInput.trim();
-    if (!targetId.toUpperCase().startsWith('R-')) {
-      targetId = `R-${targetId}`;
-    }
-    
-    router.push(`/broker/reservation/${targetId.toUpperCase()}`);
+    router.push(`/broker/reservation/${reservationIdInput.trim()}`);
   };
 
   const filteredProperties = properties.filter(prop => 
@@ -72,7 +86,7 @@ export default function BrokerPage() {
             <div>
               <h3 className="text-sm font-bold bg-gradient-to-r from-blue-600 to-emerald-600 bg-clip-text text-transparent mb-1">🔑 予約状況・鍵情報の確認</h3>
               <p className="text-xs text-slate-400 mb-4 font-medium">
-                送信済みの予約ID（例: R-10001）を入力して、承認ステータスと鍵解除情報を確認できます。
+                送信済みの予約ID（例: clx45u6...）を入力して、承認ステータスと鍵解除情報を確認できます。
               </p>
             </div>
             <form onSubmit={handleSearchReservation} className="flex gap-2">
@@ -100,7 +114,11 @@ export default function BrokerPage() {
             <span className="text-xs font-semibold text-slate-400 font-mono">({filteredProperties.length} 件)</span>
           </h2>
           
-          {filteredProperties.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-12 text-slate-405">
+              読み込み中...
+            </div>
+          ) : filteredProperties.length === 0 ? (
             <div className="text-center py-12 text-slate-400 border border-dashed border-slate-250 rounded-xl bg-white shadow-sm">
               該当する物件が見つかりませんでした。
             </div>

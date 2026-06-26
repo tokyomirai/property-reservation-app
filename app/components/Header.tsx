@@ -3,16 +3,30 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from './AuthProvider';
+
+interface GoogleUser {
+  email: string;
+  name: string;
+  picture: string;
+}
 
 export default function Header() {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const [user, setUser] = useState<GoogleUser | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = pathname?.startsWith('/admin');
   const isBroker = pathname?.startsWith('/broker');
+
+  useEffect(() => {
+    fetch('/api/auth/session')
+      .then((r) => r.json())
+      .then((data) => {
+        setUser(data.user ?? null);
+      })
+      .catch(() => setUser(null));
+  }, [pathname]); // Refresh session check on route change
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -29,8 +43,8 @@ export default function Header() {
   }, [isDropdownOpen]);
 
   const handleLogoutClick = () => {
-    logout();
     setIsDropdownOpen(false);
+    window.location.href = '/api/auth/logout';
   };
 
   return (

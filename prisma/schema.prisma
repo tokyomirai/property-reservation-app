@@ -3,49 +3,44 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-enum ReservationStatus {
-  RECEIVED
-  PENDING
-  CONFIRMED
-  CANCELLED
+  provider  = "postgresql"
 }
 
 model Property {
-  id          Int          @id @default(autoincrement())
-  name        String
-  slug        String       @unique
-  address     String?
-  description String?
-  images      String[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  reservations Reservation[]
+  id            String        @id @default(cuid())
+  name          String
+  address       String        @default("")
+  salesStatus   String        @default("販売中")
+  viewingStatus String        @default("内見可能")
+  isPublished   Boolean       @default(true)
+  hasKeyBox     String        @default("")
+  keyBoxNumber  String        @default("")
+  unlockCode    String        @default("")
+  setupLocation String        @default("")
+  hasSlippers   String        @default("")
+  hasSignboard  String        @default("")
+  notes         String        @default("")
+  internalMemo  String        @default("")
+  lastUpdatedBy String        @default("")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  reservations  Reservation[]
 }
 
 model Reservation {
-  id           Int               @id @default(autoincrement())
-  property      Property          @relation(fields: [propertyId], references: [id])
-  propertyId    Int
-  agencyName   String?
-  contactName  String?
-  phone        String?
-  email        String
-  desiredDate  DateTime?
-  desiredTime  String?
-  notes        String?
-  status       ReservationStatus @default(RECEIVED)
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  sentReplyAt  DateTime?
+  id            String   @id @default(cuid())
+  propertyId    String
+  property      Property @relation(fields: [propertyId], references: [id])
+  propertyName  String
+  companyName   String
+  agentName     String
+  phone         String
+  email         String
+  preferredDate String
+  preferredTime String
+  notes         String   @default("")
+  status        String   @default("未承認")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
-model AdminUser {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now())
-}

@@ -1,29 +1,23 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect } from 'react';
-import { initializeData } from '../utils/mockData';
 
 export default function HomePage() {
-  useEffect(() => {
-    initializeData();
-  }, []);
-
   return (
     <main className="flex-1 flex flex-col justify-center items-center px-4 py-16 bg-gradient-to-br from-slate-50 via-white to-blue-50/40">
       <div className="max-w-4xl w-full text-center space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
         
         {/* Title / Hero */}
         <div className="space-y-4">
-          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-slate-850">
+          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-slate-855">
             <span className="block text-slate-900">東京みらい不動産</span>
             <span className="block mt-2 bg-gradient-to-r from-blue-600 to-emerald-600 bg-clip-text text-transparent text-2xl sm:text-3.5xl font-bold">
               物件確認・内見受付・現況管理システム
             </span>
           </h1>
-          <p className="max-w-2xl mx-auto text-sm sm:text-base text-slate-500 leading-relaxed">
+          <p className="max-w-2xl mx-auto text-sm sm:text-base text-slate-505 leading-relaxed">
             本システムは、仲介会社様向けの物件確認および内見予約の受付業務と、
-            社内の現地備品・鍵管理および販売状況管理を一元化するための統合システムプロトタイプです。
+            社内の現地備品・鍵管理および販売状況管理を一元化するための統合システムです。
           </p>
         </div>
 
@@ -74,10 +68,6 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Sub-info / Note */}
-        <div className="pt-8 text-xs text-slate-400">
-          ※ プロトタイプ動作検証用: データの追加・編集・予約の承認等はすべてブラウザのローカルストレージ内で即時に反映されます。
-        </div>
       </div>
     </main>
   );

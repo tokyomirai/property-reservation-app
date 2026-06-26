@@ -2,13 +2,31 @@
 
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
-import { 
-  Reservation, 
-  Property,
-  getReservations, 
-  getProperties,
-  initializeData 
-} from '../../../../utils/mockData';
+
+interface Property {
+  id: string;
+  name: string;
+  address: string;
+  hasKeyBox: string;
+  keyBoxNumber: string | null;
+  unlockCode: string | null;
+  setupLocation: string | null;
+}
+
+interface Reservation {
+  id: string;
+  propertyId: string;
+  propertyName: string;
+  companyName: string;
+  agentName: string;
+  phone: string;
+  email: string;
+  preferredDate: string;
+  preferredTime: string;
+  notes: string;
+  status: string;
+  createdAt: string;
+}
 
 interface PageProps {
   params: Promise<{
@@ -24,24 +42,29 @@ export default function ReservationStatusPage({ params }: PageProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    initializeData();
     const loadData = () => {
-      const resList = getReservations();
-      const foundRes = resList.find(r => r.id === id);
-      if (foundRes) {
-        setReservation(foundRes);
-        
-        const props = getProperties();
-        const foundProp = props.find(p => p.id === foundRes.propertyId);
-        if (foundProp) {
-          setProperty(foundProp);
-        }
-      }
-      setLoading(false);
+      fetch(`/api/reservations/${id}`)
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error('Failed to fetch reservation');
+          }
+          return res.json();
+        })
+        .then((data) => {
+          setReservation(data);
+          if (data.property) {
+            setProperty(data.property);
+          }
+          setLoading(false);
+        })
+        .catch((err) => {
+          console.error(err);
+          setLoading(false);
+        });
     };
 
     loadData();
-    const interval = setInterval(loadData, 1500);
+    const interval = setInterval(loadData, 3000);
     return () => clearInterval(interval);
   }, [id]);
 

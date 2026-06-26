@@ -1,20 +1,45 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import {
-  Property,
-  Reservation,
-  getProperties,
-  saveProperties,
-  getReservations,
-  updateProperty,
-  updateReservationStatus,
-  initializeData
-} from '../../utils/mockData';
+
+interface Property {
+  id: string;
+  name: string;
+  address: string;
+  salesStatus: string;
+  viewingStatus: string;
+  isPublished: boolean;
+  hasKeyBox: string;
+  keyBoxNumber: string;
+  unlockCode: string;
+  setupLocation: string;
+  hasSlippers: string;
+  hasSignboard: string;
+  notes: string;
+  internalMemo: string;
+  lastUpdatedBy: string;
+  updatedAt: string;
+}
+
+interface Reservation {
+  id: string;
+  propertyId: string;
+  propertyName: string;
+  companyName: string;
+  agentName: string;
+  phone: string;
+  email: string;
+  preferredDate: string;
+  preferredTime: string;
+  notes: string;
+  status: string;
+  createdAt: string;
+}
 
 export default function AdminPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'properties' | 'reservations'>('properties');
   
   // モーダル・編集状態
@@ -23,11 +48,12 @@ export default function AdminPage() {
   const [selectedReservationForMail, setSelectedReservationForMail] = useState<Reservation | null>(null);
 
   // 新規登録フォーム用State
-  const [newProp, setNewProp] = useState<Omit<Property, 'id' | 'lastUpdatedAt'>>({
+  const [newProp, setNewProp] = useState<Omit<Property, 'id' | 'lastUpdatedBy' | 'updatedAt'>>({
     name: '',
     address: '',
     salesStatus: '販売中',
     viewingStatus: '内見可能',
+    isPublished: true,
     hasKeyBox: '',
     keyBoxNumber: '',
     unlockCode: '',
@@ -35,27 +61,30 @@ export default function AdminPage() {
     hasSlippers: '',
     hasSignboard: '',
     notes: '',
-    lastUpdatedBy: ''
+    internalMemo: ''
   });
+
+  const refreshData = async () => {
+    try {
+      const [propsRes, resRes] = await Promise.all([
+        fetch('/api/properties'),
+        fetch('/api/reservations')
+      ]);
+      if (propsRes.ok && resRes.ok) {
+        const propsData = await propsRes.json();
+        const resData = await resRes.json();
+        setProperties(propsData);
+        setReservations(resData);
+      }
+    } catch (err) {
+      console.error('Failed to fetch admin data:', err);
+    }
+  };
 
   // データ読み込み
   useEffect(() => {
-    initializeData();
-    setProperties(getProperties());
-    setReservations(getReservations());
+    refreshData().then(() => setLoading(false));
   }, []);
-
-  const refreshData = () => {
-    setProperties(getProperties());
-    setReservations(getReservations());
-  };
-
-  const handleResetData = () => {
-    if (confirm('デモデータを初期状態にリセットしますか？')) {
-      initializeData(true);
-      refreshData();
-    }
-  };
 
   // 物件アラート判定
   const getPropertyAlerts = (prop: Property) => {
@@ -77,61 +106,112 @@ export default function AdminPage() {
   };
 
   // 物件登録処理
-  const handleAddPropertySubmit = (e: React.FormEvent) => {
+  const handleAddPropertySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProp.name || !newProp.address || !newProp.lastUpdatedBy) {
-      alert('物件名、住所、最終更新者は必須項目です。');
+    if (!newProp.name || !newProp.address) {
+      alert('物件名、住所は必須項目です。');
       return;
     }
 
-    const newProperty: Property = {
-      ...newProp,
-      id: `prop-${Date.now()}`,
-      lastUpdatedAt: ''
-    } as Property;
-
-    updateProperty(newProperty);
-    refreshData();
-    
-    // フォーム初期化
-    setNewProp({
-      name: '',
-      address: '',
-      salesStatus: '販売中',
-      viewingStatus: '内見可能',
-      hasKeyBox: '',
-      keyBoxNumber: '',
-      unlockCode: '',
-      setupLocation: '',
-      hasSlippers: '',
-      hasSignboard: '',
-      notes: '',
-      lastUpdatedBy: ''
-    });
-    setIsAddModalOpen(false);
+    try {
+      const res = await fetch('/api/properties', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newProp)
+      });
+      if (!res.ok) {
+        throw new Error('Failed to create property');
+      }
+      await refreshData();
+      
+      // フォーム初期化
+      setNewProp({
+        name: '',
+        address: '',
+        salesStatus: '販売中',
+        viewingStatus: '内見可能',
+        isPublished: true,
+        hasKeyBox: '',
+        keyBoxNumber: '',
+        unlockCode: '',
+        setupLocation: '',
+        hasSlippers: '',
+        hasSignboard: '',
+        notes: '',
+        internalMemo: ''
+      });
+      setIsAddModalOpen(false);
+    } catch (err) {
+      console.error(err);
+      alert('物件の追加に失敗しました。');
+    }
   };
 
   // 物件更新処理
-  const handleEditPropertySubmit = (e: React.FormEvent) => {
+  const handleEditPropertySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProperty) return;
-    if (!editingProperty.name || !editingProperty.address || !editingProperty.lastUpdatedBy) {
-      alert('物件名、住所、最終更新者は必須項目です。');
+    if (!editingProperty.name || !editingProperty.address) {
+      alert('物件名、住所は必須項目です。');
       return;
     }
 
-    updateProperty(editingProperty);
-    refreshData();
-    setEditingProperty(null);
+    try {
+      const res = await fetch(`/api/properties/${editingProperty.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingProperty)
+      });
+      if (!res.ok) {
+        throw new Error('Failed to update property');
+      }
+      await refreshData();
+      setEditingProperty(null);
+    } catch (err) {
+      console.error(err);
+      alert('物件の更新に失敗しました。');
+    }
+  };
+
+  // 物件削除処理
+  const handleDeleteProperty = async (id: string) => {
+    if (!confirm('この物件を削除しますか？紐づく予約データがある場合はエラーになる可能性があります。')) return;
+
+    try {
+      const res = await fetch(`/api/properties/${id}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) {
+        throw new Error('Failed to delete property');
+      }
+      await refreshData();
+      setEditingProperty(null);
+    } catch (err) {
+      console.error(err);
+      alert('物件の削除に失敗しました。');
+    }
   };
 
   // 予約ステータス更新 (承認/却下)
-  const handleUpdateStatus = (resId: string, status: '承認済' | '却下') => {
-    const updated = updateReservationStatus(resId, status);
-    refreshData();
-    
-    if (status === '承認済' && updated) {
-      setSelectedReservationForMail(updated);
+  const handleUpdateStatus = async (resId: string, status: '承認済' | '却下') => {
+    try {
+      const res = await fetch(`/api/reservations/${resId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (!res.ok) {
+        throw new Error('Failed to update reservation status');
+      }
+      const updated = await res.json();
+      await refreshData();
+      
+      if (status === '承認済') {
+        setSelectedReservationForMail(updated);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('ステータスの更新に失敗しました。');
     }
   };
 
@@ -139,8 +219,16 @@ export default function AdminPage() {
     return properties.find(p => p.id === propertyId);
   };
 
+  if (loading) {
+    return (
+      <div className="flex-1 bg-slate-50 text-slate-800 flex items-center justify-center min-h-[70vh]">
+        <p className="text-slate-500 text-sm animate-pulse font-medium">読み込み中...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex-1 bg-slate-50 text-slate-800 p-4 sm:p-6 lg:p-8">
+    <div className="flex-1 bg-slate-50 text-slate-805 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         
         {/* Title & Actions */}
@@ -154,12 +242,6 @@ export default function AdminPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={handleResetData}
-              className="px-3.5 py-2 rounded-lg bg-white border border-slate-250 hover:bg-slate-50 text-slate-600 text-xs font-bold shadow-sm transition-colors"
-            >
-              🔄 デモデータ初期化
-            </button>
             <button
               onClick={() => setIsAddModalOpen(true)}
               className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/10 transition-all duration-200"
@@ -176,7 +258,7 @@ export default function AdminPage() {
             className={`px-5 py-4 text-sm font-bold border-b-2 transition-all duration-200 ${
               activeTab === 'properties'
                 ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-400 hover:text-slate-600'
+                : 'border-transparent text-slate-400 hover:text-slate-650'
             }`}
           >
             📋 物件管理（現況・備品）
@@ -191,7 +273,7 @@ export default function AdminPage() {
             className={`px-5 py-4 text-sm font-bold border-b-2 transition-all duration-200 ${
               activeTab === 'reservations'
                 ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-400 hover:text-slate-600'
+                : 'border-transparent text-slate-400 hover:text-slate-650'
             }`}
           >
             📬 内見予約承認待ち
@@ -208,9 +290,10 @@ export default function AdminPage() {
           <div className="bg-white border border-slate-200 rounded-b-xl overflow-hidden shadow-md">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-slate-200 text-left">
-                <thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider">
+                <thead className="bg-slate-50 text-slate-505 text-xs font-bold uppercase tracking-wider">
                   <tr>
                     <th className="px-6 py-4">物件名 / 住所</th>
+                    <th className="px-4 py-4">公開状況</th>
                     <th className="px-4 py-4">販売状況</th>
                     <th className="px-4 py-4">内見状況</th>
                     <th className="px-4 py-4">鍵管理</th>
@@ -234,6 +317,11 @@ export default function AdminPage() {
                         <td className="px-6 py-4">
                           <div className="font-bold text-slate-800">{prop.name}</div>
                           <div className="text-slate-500 text-xs mt-0.5">📍 {prop.address}</div>
+                          {prop.internalMemo && (
+                            <div className="text-[11px] text-slate-550 mt-1 bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
+                              🔒 社内メモ: {prop.internalMemo}
+                            </div>
+                          )}
                           {/* 未入力アラートリスト */}
                           {hasAlert && (
                             <div className="flex flex-wrap gap-1 mt-2">
@@ -246,6 +334,19 @@ export default function AdminPage() {
                                 </span>
                               ))}
                             </div>
+                          )}
+                        </td>
+
+                        {/* 公開状況 */}
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          {prop.isPublished ? (
+                            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                              公開中
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                              非公開
+                            </span>
                           )}
                         </td>
 
@@ -286,7 +387,7 @@ export default function AdminPage() {
                                 KBあり
                               </span>
                               {prop.unlockCode ? (
-                        <div className="text-slate-700 font-mono font-semibold">管理番号: {prop.keyBoxNumber} / 解除: {prop.unlockCode}</div>
+                                <div className="text-slate-700 font-mono font-semibold">管理番号: {prop.keyBoxNumber} / 解除: {prop.unlockCode}</div>
                               ) : (
                                 <div className="text-rose-600 font-extrabold animate-pulse">❌ 解除番号未入力</div>
                               )}
@@ -360,7 +461,7 @@ export default function AdminPage() {
           <div className="bg-white border border-slate-200 rounded-b-xl overflow-hidden shadow-md">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-slate-200 text-left">
-                <thead className="bg-slate-50 text-slate-500 text-xs font-bold uppercase tracking-wider">
+                <thead className="bg-slate-50 text-slate-505 text-xs font-bold uppercase tracking-wider">
                   <tr>
                     <th className="px-6 py-4">申込日時</th>
                     <th className="px-6 py-4">対象物件</th>
@@ -379,11 +480,10 @@ export default function AdminPage() {
                     </tr>
                   ) : (
                     reservations.map((res) => {
-                      const prop = getPropertyForReservation(res.propertyId);
                       return (
                         <tr key={res.id} className="hover:bg-slate-50/50 transition-colors">
                           <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-555 font-medium">
-                            {res.createdAt}
+                            {new Date(res.createdAt).toLocaleString('ja-JP')}
                           </td>
                           <td className="px-6 py-4">
                             <div className="font-bold text-slate-800">{res.propertyName}</div>
@@ -402,7 +502,7 @@ export default function AdminPage() {
                             <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
                               res.status === '承認済' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
                               res.status === '未承認' ? 'bg-amber-50 text-amber-700 border border-amber-250' :
-                              'bg-rose-50 text-rose-750 border border-rose-200'
+                              'bg-rose-50 text-rose-755 border border-rose-200'
                             }`}>
                               {res.status}
                             </span>
@@ -485,8 +585,19 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-1">
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">公開設定</label>
+                  <select
+                    className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                    value={newProp.isPublished ? "true" : "false"}
+                    onChange={e => setNewProp({...newProp, isPublished: e.target.value === "true"})}
+                  >
+                    <option value="true">公開</option>
+                    <option value="false">非公開</option>
+                  </select>
+                </div>
+                <div className="col-span-1">
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">販売状況</label>
                   <select
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
@@ -500,7 +611,7 @@ export default function AdminPage() {
                     <option value="募集停止中">募集停止中</option>
                   </select>
                 </div>
-                <div>
+                <div className="col-span-1">
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">内見状況</label>
                   <select
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
@@ -599,7 +710,7 @@ export default function AdminPage() {
 
               <div className="border-t border-slate-200 pt-4 space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">備考</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">備考 (仲介会社に公開)</label>
                   <textarea
                     rows={2}
                     placeholder="仲介会社へも見せたい案内事項を入力"
@@ -609,14 +720,13 @@ export default function AdminPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">最終更新者 <span className="text-rose-500">*</span></label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="ご自身の名前"
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">社内メモ (管理者のみ閲覧可能・完全非公開)</label>
+                  <textarea
+                    rows={2}
+                    placeholder="社内だけで共有したいメモ・注意事項を入力"
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
-                    value={newProp.lastUpdatedBy}
-                    onChange={e => setNewProp({...newProp, lastUpdatedBy: e.target.value})}
+                    value={newProp.internalMemo}
+                    onChange={e => setNewProp({...newProp, internalMemo: e.target.value})}
                   />
                 </div>
               </div>
@@ -657,9 +767,12 @@ export default function AdminPage() {
             
             <form onSubmit={handleEditPropertySubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
               
-              <div>
+              <div className="flex justify-between items-center">
                 <span className="text-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">
                   ID: {editingProperty.id}
+                </span>
+                <span className="text-[11px] text-slate-450 font-medium">
+                  最終更新: {editingProperty.lastUpdatedBy || '未設定'}
                 </span>
               </div>
 
@@ -686,8 +799,19 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-1">
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">公開設定</label>
+                  <select
+                    className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                    value={editingProperty.isPublished ? "true" : "false"}
+                    onChange={e => setEditingProperty({...editingProperty, isPublished: e.target.value === "true"})}
+                  >
+                    <option value="true">公開</option>
+                    <option value="false">非公開</option>
+                  </select>
+                </div>
+                <div className="col-span-1">
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">販売状況</label>
                   <select
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
@@ -701,7 +825,7 @@ export default function AdminPage() {
                     <option value="募集停止中">募集停止中</option>
                   </select>
                 </div>
-                <div>
+                <div className="col-span-1">
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">内見状況</label>
                   <select
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
@@ -800,7 +924,7 @@ export default function AdminPage() {
 
               <div className="border-t border-slate-200 pt-4 space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">備考</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">備考 (仲介会社に公開)</label>
                   <textarea
                     rows={2}
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
@@ -809,13 +933,13 @@ export default function AdminPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">最終更新者 <span className="text-rose-500">*</span></label>
-                  <input
-                    type="text"
-                    required
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">社内メモ (管理者のみ閲覧可能・完全非公開)</label>
+                  <textarea
+                    rows={2}
+                    placeholder="社内だけで共有したいメモ・注意事項を入力"
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
-                    value={editingProperty.lastUpdatedBy}
-                    onChange={e => setEditingProperty({...editingProperty, lastUpdatedBy: e.target.value})}
+                    value={editingProperty.internalMemo}
+                    onChange={e => setEditingProperty({...editingProperty, internalMemo: e.target.value})}
                   />
                 </div>
               </div>
@@ -829,8 +953,15 @@ export default function AdminPage() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => handleDeleteProperty(editingProperty.id)}
+                  className="px-4 py-2.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-sm border border-rose-200"
+                >
+                  物件削除
+                </button>
+                <button
+                  type="button"
                   onClick={() => setEditingProperty(null)}
-                  className="px-4 py-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm border border-slate-250"
+                  className="px-4 py-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-650 font-bold text-sm border border-slate-250"
                 >
                   キャンセル
                 </button>
@@ -863,12 +994,12 @@ export default function AdminPage() {
                   ※ 内見承認が完了しました。システムより仲介業者様宛に以下のメールが自動送信されています。
                 </p>
 
-                <div className="bg-slate-950 border border-slate-900 rounded-lg p-4 font-mono text-xs text-slate-350 space-y-3 shadow-inner">
+                <div className="bg-slate-955 border border-slate-900 rounded-lg p-4 font-mono text-xs text-slate-350 space-y-3 shadow-inner">
                   <div>
-                    <span className="text-slate-500">件名:</span> <span className="text-slate-100 font-bold">【内見確定】内見のご案内と鍵情報のお知らせ（東京みらい不動産）</span>
+                    <span className="text-slate-550">件名:</span> <span className="text-slate-100 font-bold">【内見確定】内見のご案内と鍵情報のお知らせ（東京みらい不動産）</span>
                   </div>
                   <div>
-                    <span className="text-slate-500">宛先:</span> <span className="text-indigo-400 font-bold">{selectedReservationForMail.email}</span> ({selectedReservationForMail.companyName} {selectedReservationForMail.agentName}様)
+                    <span className="text-slate-550">宛先:</span> <span className="text-indigo-400 font-bold">{selectedReservationForMail.email}</span> ({selectedReservationForMail.companyName} {selectedReservationForMail.agentName}様)
                   </div>
                   <div className="border-t border-slate-800 pt-3 text-slate-300 whitespace-pre-wrap leading-relaxed">
 {`${selectedReservationForMail.companyName}
@@ -883,6 +1014,7 @@ ${selectedReservationForMail.agentName} 様
 ■ 内見概要
 【物件名】 ${selectedReservationForMail.propertyName}
 【日時】 ${selectedReservationForMail.preferredDate} ${selectedReservationForMail.preferredTime}
+【予約詳細照会URL】 ${window.location.origin}/broker/reservation/${selectedReservationForMail.id}
 
 ■ 鍵情報（キーボックス解除番号）
 ${prop?.hasKeyBox === 'あり' ? `【キーボックス番号】 ${prop.keyBoxNumber || '未設定'}

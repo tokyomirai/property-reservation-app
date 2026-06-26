@@ -3,12 +3,18 @@
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { 
-  Property, 
-  getProperties, 
-  addReservation, 
-  initializeData 
-} from '../../../../utils/mockData';
+
+interface Property {
+  id: string;
+  name: string;
+  address: string;
+  salesStatus: string;
+  viewingStatus: string;
+  isPublished: boolean;
+  hasSlippers: string;
+  hasSignboard: string;
+  notes: string;
+}
 
 interface PageProps {
   params: Promise<{
@@ -35,13 +41,21 @@ export default function PropertyDetailPage({ params }: PageProps) {
   });
 
   useEffect(() => {
-    initializeData();
-    const props = getProperties();
-    const found = props.find(p => p.id === id);
-    if (found) {
-      setProperty(found);
-    }
-    setLoading(false);
+    fetch(`/api/properties/${id}`)
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error('Failed to fetch property');
+        }
+        return res.json();
+      })
+      .then((data) => {
+        setProperty(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        setLoading(false);
+      });
   }, [id]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -53,19 +67,35 @@ export default function PropertyDetailPage({ params }: PageProps) {
       return;
     }
 
-    const newRes = addReservation({
-      propertyId: property.id,
-      propertyName: property.name,
-      companyName: formData.companyName,
-      agentName: formData.agentName,
-      phone: formData.phone,
-      email: formData.email,
-      preferredDate: formData.preferredDate,
-      preferredTime: formData.preferredTime,
-      notes: formData.notes,
-    });
-
-    router.push(`/broker/reservation/${newRes.id}`);
+    fetch('/api/reservations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        propertyId: property.id,
+        companyName: formData.companyName,
+        agentName: formData.agentName,
+        phone: formData.phone,
+        email: formData.email,
+        preferredDate: formData.preferredDate,
+        preferredTime: formData.preferredTime,
+        notes: formData.notes,
+      }),
+    })
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error('Failed to submit reservation');
+        }
+        return res.json();
+      })
+      .then((newRes) => {
+        router.push(`/broker/reservation/${newRes.id}`);
+      })
+      .catch((err) => {
+        console.error(err);
+        alert('予約の送信に失敗しました。入力内容を確認の上、再度お試しください。');
+      });
   };
 
   if (loading) {

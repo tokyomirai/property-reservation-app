@@ -1,5 +1,5 @@
 // utils/mail.ts
-import { Reservation } from './mockData';
+import { type Reservation } from '@prisma/client';
 
 // Simple placeholder for sending email notifications.
 // In production replace with Nodemailer or SendGrid implementation.

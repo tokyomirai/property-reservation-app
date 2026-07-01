@@ -3,7 +3,7 @@ import { jwtVerify } from 'jose';
 
 export async function GET(request: NextRequest) {
   const cookie = request.cookies.get('admin_session');
-  const jwtSecret = process.env.JWT_SECRET;
+  const jwtSecret = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
 
   if (!cookie?.value || !jwtSecret) {
     return Response.json({ user: null });

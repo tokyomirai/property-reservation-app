@@ -4,7 +4,7 @@ import { SignJWT } from 'jose';
 const ALLOWED_DOMAIN = 'tokyomf.co.jp';
 
 export async function GET(request: NextRequest) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
   const error = searchParams.get('error');
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 4. JWTセッションを作成してCookieにセット
-    const jwtSecret = process.env.JWT_SECRET;
+    const jwtSecret = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
     if (!jwtSecret) {
       return Response.redirect(`${appUrl}/admin?error=server_config`);
     }

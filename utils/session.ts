@@ -8,7 +8,7 @@ export interface SessionUser {
 }
 
 export async function getSession(): Promise<SessionUser | null> {
-  const jwtSecret = process.env.JWT_SECRET;
+  const jwtSecret = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
   if (!jwtSecret) return null;
 
   try {

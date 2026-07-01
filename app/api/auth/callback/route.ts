@@ -45,10 +45,12 @@ export async function GET(request: NextRequest) {
     }
 
     const userInfo = await userResponse.json();
-    const email: string = userInfo.email ?? '';
+    console.log('Google UserInfo response:', JSON.stringify(userInfo));
+
+    const email = (userInfo && typeof userInfo.email === 'string') ? userInfo.email : '';
 
     // 3. ドメイン検証
-    if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) {
+    if (!email || !email.endsWith(`@${ALLOWED_DOMAIN}`)) {
       return Response.redirect(`${appUrl}/admin?error=domain_mismatch&email=${encodeURIComponent(email)}`);
     }
 

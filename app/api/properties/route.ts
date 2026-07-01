@@ -10,12 +10,10 @@ const PUBLIC_SELECT = {
   salesStatus: true,
   viewingStatus: true,
   isPublished: true,
-  hasSlippers: true,
-  hasSignboard: true,
   notes: true,
   createdAt: true,
   updatedAt: true,
-  // 除外: unlockCode, keyBoxNumber, setupLocation, hasKeyBox, internalMemo, lastUpdatedBy
+  // 除外: unlockCode, keyBoxNumber, setupLocation, hasKeyBox, hasSlippers, hasSignboard, internalMemo, lastUpdatedBy
 };
 
 // GET: 物件一覧取得

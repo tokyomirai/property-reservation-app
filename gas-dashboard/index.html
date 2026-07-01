@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<title>社内ダッシュボード</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --color-bg: #f4f6f9;
+    --color-card: #ffffff;
+    --color-text: #1f2937;
+    --color-sub: #6b7280;
+    --color-primary: #2563eb;
+    --color-green: #22c55e;
+    --color-orange: #f97316;
+    --color-blue: #3b82f6;
+    --color-border: #e5e7eb;
+    --color-danger: #dc2626;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", "Segoe UI", sans-serif;
+    background: var(--color-bg);
+    color: var(--color-text);
+  }
+  .app-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 20px;
+    background: var(--color-card);
+    border-bottom: 1px solid var(--color-border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .app-header h1 { font-size: 20px; margin: 0; }
+  .header-meta { font-size: 12px; color: var(--color-sub); margin-top: 4px; }
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+  button.action-btn {
+    border: 1px solid var(--color-border);
+    background: var(--color-card);
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  button.action-btn:hover { background: #f3f4f6; }
+  button.action-btn.primary { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+  button.action-btn.primary:hover { background: #1d4ed8; }
+
+  main { padding: 16px 20px 48px; max-width: 1400px; margin: 0 auto; }
+  section { margin-bottom: 28px; }
+  section h2 {
+    font-size: 15px;
+    color: var(--color-sub);
+    border-left: 4px solid var(--color-primary);
+    padding-left: 8px;
+    margin: 0 0 12px;
+  }
+  .ranking-card h3 { font-size: 14px; margin: 0 0 8px; }
+
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+  }
+  .kpi-card {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .kpi-card .kpi-title { font-size: 13px; color: var(--color-sub); margin-bottom: 8px; font-weight: 600; }
+  .kpi-card .kpi-row { display: flex; justify-content: space-between; font-size: 13px; margin: 4px 0; color: var(--color-text); }
+  .kpi-card .kpi-row span:last-child { font-weight: 600; }
+  .kpi-card .kpi-rate { font-size: 24px; font-weight: 700; color: var(--color-primary); margin: 4px 0 8px; }
+  .progress-bar { height: 8px; background: #eef1f5; border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
+  .progress-bar > div { height: 100%; background: var(--color-primary); }
+
+  .chart-card {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .chart-card.large { height: 460px; }
+  .chart-card:not(.large) { height: 340px; }
+  .chart-scroll { overflow-x: auto; overflow-y: hidden; }
+  .chart-scroll > div { height: 100%; }
+
+  .ranking-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .ranking-card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius); padding: 12px 16px; }
+  .ranking-list { list-style: none; margin: 0; padding: 0; }
+  .ranking-list li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--color-border); }
+  .ranking-list li:last-child { border-bottom: none; }
+  .rank-no {
+    width: 26px; height: 26px; border-radius: 50%; background: #eef1f5;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: var(--color-sub); flex-shrink: 0;
+  }
+  .rank-no.top1 { background: #fde68a; color: #92400e; }
+  .rank-no.top2 { background: #e5e7eb; color: #374151; }
+  .rank-no.top3 { background: #fbcfe8; color: #9d174d; }
+  .rank-name { flex: 1; font-size: 14px; }
+  .rank-value { font-weight: 700; font-size: 14px; }
+
+  .error-banner {
+    background: #fee2e2; color: var(--color-danger); border: 1px solid #fecaca;
+    border-radius: 8px; padding: 12px 16px; margin: 16px 20px; font-size: 13px; white-space: pre-wrap;
+  }
+  .loading-overlay {
+    position: fixed; inset: 0; background: rgba(255,255,255,0.75);
+    display: flex; align-items: center; justify-content: center; z-index: 999;
+    font-size: 14px; color: var(--color-sub);
+  }
+  .hidden { display: none !important; }
+
+  @media (max-width: 640px) {
+    .app-header { padding: 12px 14px; }
+    .app-header h1 { font-size: 16px; }
+    main { padding: 12px; }
+    .chart-card.large { height: 320px; }
+    .chart-card:not(.large) { height: 280px; }
+  }
+
+  @media print {
+    @page { size: A4 landscape; margin: 8mm; }
+    html, body { background: #fff; }
+    .app-header .header-actions, .no-print, .loading-overlay { display: none !important; }
+    .app-header { position: static; }
+    section { break-inside: avoid; margin-bottom: 12px; }
+    .chart-card, .kpi-card, .ranking-card { border: 1px solid #ccc; box-shadow: none; }
+    .chart-card.large { height: 260px; }
+    .chart-card:not(.large) { height: 220px; }
+  }
+</style>
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>社内ダッシュボード</h1>
+      <div class="header-meta">最終更新: <span id="updatedAt">-</span>（<span id="countdown">60</span>秒後に自動更新）</div>
+    </div>
+    <div class="header-actions no-print">
+      <button class="action-btn" id="refreshBtn">今すぐ更新</button>
+      <button class="action-btn primary" id="printBtn">PDF出力 / 印刷</button>
+    </div>
+  </header>
+
+  <div id="errorBanner" class="error-banner hidden"></div>
+
+  <main id="mainContent">
+    <section>
+      <h2>① 年間目標進捗</h2>
+      <div class="card-grid" id="kpiGrid"></div>
+    </section>
+
+    <section>
+      <h2>② 担当者別 決済済粗利</h2>
+      <div class="chart-card large chart-scroll"><div><canvas id="chartSettled"></canvas></div></div>
+    </section>
+
+    <section>
+      <h2>③ 担当者別 粗利（在庫粗利 + 確定粗利）</h2>
+      <div class="chart-card chart-scroll"><div><canvas id="chartProfit"></canvas></div></div>
+    </section>
+
+    <section>
+      <h2>④ 担当者別 売上（在庫売上 + 売上）</h2>
+      <div class="chart-card chart-scroll"><div><canvas id="chartSales"></canvas></div></div>
+    </section>
+
+    <section>
+      <h2>⑤ ランキング（社長を除く / TOP10）</h2>
+      <div class="ranking-grid">
+        <div class="ranking-card">
+          <h3>決済済粗利ランキング</h3>
+          <ol class="ranking-list" id="rankSettled"></ol>
+        </div>
+        <div class="ranking-card">
+          <h3>売上ランキング</h3>
+          <ol class="ranking-list" id="rankSales"></ol>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="loadingOverlay" class="loading-overlay">読み込み中...</div>
+
+<script>
+  var REFRESH_INTERVAL_SEC = 60;
+  var countdownValue = REFRESH_INTERVAL_SEC;
+  var countdownTimer = null;
+  var charts = {};
+
+  function yen(n) {
+    return '¥' + Math.round(n || 0).toLocaleString('ja-JP');
+  }
+
+  function formatPersonLabel(p) {
+    if (p.code === '9998') return '賃貸';
+    if (p.code === '9999') return '退職者';
+    return p.name;
+  }
+
+  function showError(message) {
+    var el = document.getElementById('errorBanner');
+    el.textContent = 'エラーが発生しました: ' + message;
+    el.classList.remove('hidden');
+  }
+
+  function clearError() {
+    var el = document.getElementById('errorBanner');
+    el.classList.add('hidden');
+    el.textContent = '';
+  }
+
+  function renderKpi(division) {
+    division = division || {};
+    var items = [
+      { key: 'sales', label: '売上' },
+      { key: 'floor4Profit', label: '4階営業部粗利' },
+      { key: 'reinsProfit', label: 'レインズ粗利' },
+      { key: 'annualProfit', label: '年間粗利' }
+    ];
+    var grid = document.getElementById('kpiGrid');
+    grid.innerHTML = '';
+    items.forEach(function (it) {
+      var d = division[it.key];
+      var card = document.createElement('div');
+      card.className = 'kpi-card';
+      if (!d) {
+        card.innerHTML = '<div class="kpi-title">' + it.label + '</div><div class="kpi-row"><span>データなし</span></div>';
+        grid.appendChild(card);
+        return;
+      }
+      var ratePct = Math.round(d.rate * 1000) / 10;
+      card.innerHTML =
+        '<div class="kpi-title">' + it.label + '</div>' +
+        '<div class="kpi-rate">' + ratePct + '%</div>' +
+        '<div class="progress-bar"><div style="width:' + Math.min(100, Math.max(0, ratePct)) + '%"></div></div>' +
+        '<div class="kpi-row"><span>年間目標</span><span>' + yen(d.target) + '</span></div>' +
+        '<div class="kpi-row"><span>実績</span><span>' + yen(d.actual) + '</span></div>' +
+        '<div class="kpi-row"><span>残額</span><span>' + yen(d.remaining) + '</span></div>';
+      grid.appendChild(card);
+    });
+  }
+
+  function upsertBarChart(id, labels, datasets, opts) {
+    opts = opts || {};
+    var canvas = document.getElementById(id);
+    if (charts[id]) {
+      charts[id].data.labels = labels;
+      charts[id].data.datasets = datasets;
+      charts[id].update();
+      return;
+    }
+    charts[id] = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: datasets.length > 1 } },
+        scales: {
+          x: { stacked: !!opts.stacked, ticks: { autoSkip: false, maxRotation: 60, minRotation: 0 } },
+          y: { stacked: !!opts.stacked, beginAtZero: true, ticks: { callback: function (v) { return yen(v); } } }
+        }
+      }
+    });
+  }
+
+  function renderPersonCharts(people) {
+    people = people || [];
+    var labels = people.map(formatPersonLabel);
+    var minWidth = Math.max(600, labels.length * 60) + 'px';
+
+    ['chartSettled', 'chartProfit', 'chartSales'].forEach(function (id) {
+      document.getElementById(id).parentElement.style.minWidth = minWidth;
+    });
+
+    upsertBarChart('chartSettled', labels, [
+      { label: '決済済粗利', data: people.map(function (p) { return p.settledProfit; }), backgroundColor: '#3b82f6' }
+    ], { stacked: false });
+
+    upsertBarChart('chartProfit', labels, [
+      { label: '在庫粗利', data: people.map(function (p) { return p.stockProfit; }), backgroundColor: '#22c55e' },
+      { label: '確定粗利', data: people.map(function (p) { return p.confirmedProfit; }), backgroundColor: '#f97316' }
+    ], { stacked: true });
+
+    upsertBarChart('chartSales', labels, [
+      { label: '在庫売上', data: people.map(function (p) { return p.stockSales; }), backgroundColor: '#22c55e' },
+      { label: '売上', data: people.map(function (p) { return p.sales; }), backgroundColor: '#f97316' }
+    ], { stacked: true });
+  }
+
+  function renderRanking(elId, list, valueKey) {
+    list = list || [];
+    var el = document.getElementById(elId);
+    el.innerHTML = '';
+    if (list.length === 0) {
+      el.innerHTML = '<li>データがありません</li>';
+      return;
+    }
+    list.forEach(function (p, i) {
+      var li = document.createElement('li');
+      var rankClass = i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : '';
+      li.innerHTML =
+        '<span class="rank-no ' + rankClass + '">' + (i + 1) + '</span>' +
+        '<span class="rank-name">' + formatPersonLabel(p) + '</span>' +
+        '<span class="rank-value">' + yen(p[valueKey]) + '</span>';
+      el.appendChild(li);
+    });
+  }
+
+  function renderAll(data) {
+    renderKpi(data.division);
+    renderPersonCharts(data.people);
+    renderRanking('rankSettled', data.ranking.settledProfit, 'settledProfit');
+    renderRanking('rankSales', data.ranking.sales, 'sales');
+    document.getElementById('updatedAt').textContent = new Date(data.updatedAt).toLocaleString('ja-JP');
+  }
+
+  function loadData(showLoading) {
+    if (showLoading) document.getElementById('loadingOverlay').classList.remove('hidden');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        document.getElementById('loadingOverlay').classList.add('hidden');
+        if (!res || !res.success) {
+          showError(res && res.error ? res.error : '不明なエラーが発生しました');
+          return;
+        }
+        clearError();
+        renderAll(res);
+      })
+      .withFailureHandler(function (err) {
+        document.getElementById('loadingOverlay').classList.add('hidden');
+        showError(err && err.message ? err.message : String(err));
+      })
+      .getDashboardData();
+  }
+
+  function startCountdown() {
+    if (countdownTimer) clearInterval(countdownTimer);
+    countdownValue = REFRESH_INTERVAL_SEC;
+    countdownTimer = setInterval(function () {
+      countdownValue -= 1;
+      if (countdownValue <= 0) {
+        loadData(false);
+        countdownValue = REFRESH_INTERVAL_SEC;
+      }
+      document.getElementById('countdown').textContent = countdownValue;
+    }, 1000);
+  }
+
+  document.getElementById('refreshBtn').addEventListener('click', function () {
+    loadData(true);
+    countdownValue = REFRESH_INTERVAL_SEC;
+  });
+  document.getElementById('printBtn').addEventListener('click', function () {
+    window.print();
+  });
+
+  loadData(true);
+  startCountdown();
+</script>
+</body>
+</html>

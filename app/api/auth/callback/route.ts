@@ -1,4 +1,4 @@
-import { type NextRequest } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { SignJWT } from 'jose';
 
 const ALLOWED_DOMAIN = 'tokyomf.co.jp';
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
 
   // Googleがキャンセルまたはエラーを返した場合
   if (error || !code) {
-    return Response.redirect(`${appUrl}/admin?error=cancelled`);
+    return NextResponse.redirect(`${appUrl}/admin?error=cancelled`);
   }
 
   try {
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
     if (!tokenResponse.ok) {
       console.error('Token exchange failed:', await tokenResponse.text());
-      return Response.redirect(`${appUrl}/admin?error=token_failed`);
+      return NextResponse.redirect(`${appUrl}/admin?error=token_failed`);
     }
 
     const tokens = await tokenResponse.json();
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!userResponse.ok) {
-      return Response.redirect(`${appUrl}/admin?error=user_info_failed`);
+      return NextResponse.redirect(`${appUrl}/admin?error=user_info_failed`);
     }
 
     const userInfo = await userResponse.json();
@@ -51,13 +51,13 @@ export async function GET(request: NextRequest) {
 
     // 3. ドメイン検証
     if (!email || !email.endsWith(`@${ALLOWED_DOMAIN}`)) {
-      return Response.redirect(`${appUrl}/admin?error=domain_mismatch&email=${encodeURIComponent(email)}`);
+      return NextResponse.redirect(`${appUrl}/admin?error=domain_mismatch&email=${encodeURIComponent(email)}`);
     }
 
     // 4. JWTセッションを作成してCookieにセット
     const jwtSecret = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
     if (!jwtSecret) {
-      return Response.redirect(`${appUrl}/admin?error=server_config`);
+      return NextResponse.redirect(`${appUrl}/admin?error=server_config`);
     }
 
     const secret = new TextEncoder().encode(jwtSecret);
@@ -71,16 +71,17 @@ export async function GET(request: NextRequest) {
       .setExpirationTime('8h')
       .sign(secret);
 
-    const response = Response.redirect(`${appUrl}/admin`);
-    response.headers.set(
-      'Set-Cookie',
-      `admin_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=28800${
-        appUrl.startsWith('https') ? '; Secure' : ''
-      }`
-    );
+    const response = NextResponse.redirect(`${appUrl}/admin`);
+    response.cookies.set('admin_session', token, {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 28800,
+      secure: appUrl.startsWith('https'),
+    });
     return response;
   } catch (e) {
     console.error('OAuth callback error:', e);
-    return Response.redirect(`${appUrl}/admin?error=server_error`);
+    return NextResponse.redirect(`${appUrl}/admin?error=server_error`);
   }
 }

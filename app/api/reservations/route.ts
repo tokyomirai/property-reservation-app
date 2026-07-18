@@ -1,5 +1,6 @@
 import { prisma } from '../../../utils/db';
 import { getSession, unauthorized } from '../../../utils/session';
+import { sendReservationEmail } from '../../../utils/mail';
 import { type NextRequest } from 'next/server';
 
 // GET: 予約一覧（管理者のみ）
@@ -44,6 +45,9 @@ export async function POST(request: NextRequest) {
       notes: body.notes ?? '',
     },
   });
+
+  // 内見予約通知メールを info@ ＋ 物件担当営業へ送信（失敗しても予約自体は成立させる）
+  await sendReservationEmail(reservation, property.salesRepEmail);
 
   return Response.json(reservation, { status: 201 });
 }

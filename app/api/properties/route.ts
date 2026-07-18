@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
       hasSignboard: body.hasSignboard ?? '',
       notes: body.notes ?? '',
       internalMemo: body.internalMemo ?? '',
+      salesRepEmail: body.salesRepEmail ?? '',
       lastUpdatedBy: session.name,
     },
   });

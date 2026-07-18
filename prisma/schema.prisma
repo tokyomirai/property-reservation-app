@@ -21,6 +21,7 @@ model Property {
   hasSignboard  String        @default("")
   notes         String        @default("")
   internalMemo  String        @default("")
+  salesRepEmail String        @default("")
   lastUpdatedBy String        @default("")
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt

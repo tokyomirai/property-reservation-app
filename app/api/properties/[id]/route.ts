@@ -26,7 +26,7 @@ export async function GET(
         return Response.json({ error: 'Property not found or not available' }, { status: 404 });
       }
       // 公開表示時はセキュリティ情報および管理情報を除外
-      const { unlockCode, keyBoxNumber, setupLocation, hasKeyBox, hasSlippers, hasSignboard, internalMemo, lastUpdatedBy, ...safeProperty } = property;
+      const { unlockCode, keyBoxNumber, setupLocation, hasKeyBox, hasSlippers, hasSignboard, internalMemo, salesRepEmail, lastUpdatedBy, ...safeProperty } = property;
       return Response.json(safeProperty);
     }
   } catch (err) {
@@ -62,6 +62,7 @@ export async function PUT(
         hasSignboard: body.hasSignboard,
         notes: body.notes,
         internalMemo: body.internalMemo,
+        salesRepEmail: body.salesRepEmail,
         lastUpdatedBy: session.name,
       },
     });

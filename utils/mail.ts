@@ -90,3 +90,103 @@ export async function sendReservationEmail(
     console.error('❌ 予約通知メール送信で例外:', err);
   }
 }
+
+// 承認時に付与される物件の鍵情報
+type KeyInfo = {
+  hasKeyBox: string;
+  keyBoxNumber: string;
+  unlockCode: string;
+  setupLocation: string;
+} | null | undefined;
+
+/**
+ * 内見予約が「承認済」になった際に、申込者（仲介担当者）へ
+ * 内見確定・鍵情報のメールを送信する。
+ * @param reservation 承認された予約
+ * @param property 物件の鍵情報（キーボックス番号・解除番号・設置場所）
+ */
+export async function sendApprovalEmail(reservation: Reservation, property: KeyInfo) {
+  const apiKey = process.env.RESEND_API_KEY;
+
+  const to = (reservation.email ?? '').trim();
+  if (!to) {
+    console.warn('⚠️ 申込者メールアドレスが空のため承認メールをスキップ:', reservation.id);
+    return;
+  }
+
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || '';
+  const detailUrl = appUrl
+    ? `${appUrl}/broker/reservation/${reservation.id}`
+    : '(予約詳細URL未設定)';
+
+  const subject = '【内見確定】内見のご案内と鍵情報のお知らせ（東京みらい不動産）';
+
+  const keyBlock =
+    property?.hasKeyBox === 'あり'
+      ? [
+          `【キーボックス番号】 ${property.keyBoxNumber || '未設定'}`,
+          `【解除番号】 ${property.unlockCode || '未設定'}`,
+          `【設置場所】 ${property.setupLocation || '未設定'}`,
+        ].join('\n')
+      : '【鍵の受渡】 キーボックスはございません。担当者より別途ご案内いたします。';
+
+  const text = [
+    `${reservation.companyName}`,
+    `${reservation.agentName} 様`,
+    '',
+    'いつも大変お世話になっております。',
+    '東京みらい不動産でございます。',
+    '',
+    'お申込みいただきました下記物件の内見希望につきまして、以下の通りご案内を確定いたしました。',
+    '現地キーボックスの解除番号、設置場所をお知らせいたします。',
+    '',
+    '■ 内見概要',
+    `【物件名】 ${reservation.propertyName}`,
+    `【日時】 ${reservation.preferredDate} ${reservation.preferredTime}`,
+    `【予約詳細照会URL】 ${detailUrl}`,
+    '',
+    '■ 鍵情報（キーボックス解除番号）',
+    keyBlock,
+    '',
+    '■ 注意事項',
+    '・内見終了後は、必ずキーボックスに鍵を戻し、ダイヤルをランダムに回して施錠を確認してください。',
+    '・電気・エアコンをご利用になった場合は、退室時に必ず消灯・停止してください。',
+    '・現地備品（スリッパ・売り看板など）は持ち出さないようお願いいたします。',
+    '',
+    'よろしくお願い申し上げます。',
+    '--------------------------------------------------',
+    '東京みらい不動産 営業部',
+    '--------------------------------------------------',
+  ].join('\n');
+
+  if (!apiKey) {
+    console.warn('⚠️ RESEND_API_KEY 未設定のため承認メールをスキップ（モック出力）:', {
+      to,
+      subject,
+      reservationId: reservation.id,
+    });
+    return;
+  }
+
+  const resend = new Resend(apiKey);
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: FROM,
+      to,
+      replyTo: NOTIFY_TO, // 返信すると社内(info@)へ届く
+      subject,
+      text,
+    });
+
+    if (error) {
+      console.error('❌ 承認メール送信エラー(Resend):', error);
+      return;
+    }
+    console.log(`✅ 承認メール送信成功 (id: ${data?.id}) → ${to}`);
+  } catch (err) {
+    // メール送信失敗が承認処理自体を失敗させないよう握りつぶす
+    console.error('❌ 承認メール送信で例外:', err);
+  }
+}

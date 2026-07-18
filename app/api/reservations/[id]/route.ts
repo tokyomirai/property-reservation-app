@@ -1,5 +1,6 @@
 import { prisma } from '../../../../utils/db';
 import { getSession, unauthorized } from '../../../../utils/session';
+import { sendApprovalEmail } from '../../../../utils/mail';
 import { type NextRequest } from 'next/server';
 
 // GET: 予約詳細（公開）
@@ -79,6 +80,13 @@ export async function PATCH(
         },
       },
     });
+
+    // 「承認済」になったら、申込者へ内見確定・鍵情報メールを送信
+    // （メール送信失敗は承認処理自体を止めない）
+    if (body.status === '承認済') {
+      await sendApprovalEmail(reservation, reservation.property);
+    }
+
     return Response.json(reservation);
   } catch {
     return Response.json({ error: 'Reservation not found' }, { status: 404 });

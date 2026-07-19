@@ -176,7 +176,7 @@ export default function PropertyDetailPage({ params }: PageProps) {
               <span>📅</span> 内見予約お申込みフォーム
             </h2>
             <p className="text-slate-500 text-xs mt-1 font-medium">
-              必要事項をご入力の上、送信してください。社内で承認され次第、鍵情報（暗証番号など）が自動で開示されます。
+              必要事項をご入力の上、送信してください。社内で承認後、鍵情報（暗証番号など）は内見日の前日から予約状況ページに表示されます。
             </p>
           </div>
 

@@ -50,64 +50,67 @@ export default function Header() {
   return (
     <header className="bg-white border-b border-slate-200 text-slate-800 sticky top-0 z-50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between h-16 gap-2">
           {/* Logo / Title */}
-          <div className="flex items-center space-x-3">
-            <Link href="/" className="flex items-center gap-2.5 group">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <Link href="/" className="flex items-center gap-2 sm:gap-2.5 group shrink-0">
               {/* Symbol mark image – place logo-mark.png in /public/ */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/logo-mark.png.jpg"
                 alt=""
-                className="h-10 w-auto transition-transform group-hover:scale-[1.01]"
+                className="h-8 sm:h-10 w-auto transition-transform group-hover:scale-[1.01]"
               />
               {/* Company name text matching the official logo typography */}
-              <div className="flex flex-col leading-none">
-                <span className="text-[11px] text-slate-500 font-semibold tracking-widest">株式会社</span>
-                <span className="text-[18px] font-extrabold text-slate-900 tracking-tight leading-tight">東京みらい不動産</span>
+              <div className="flex flex-col leading-none whitespace-nowrap">
+                <span className="text-[10px] sm:text-[11px] text-slate-500 font-semibold tracking-widest">株式会社</span>
+                <span className="text-[15px] sm:text-[18px] font-extrabold text-slate-900 tracking-tight leading-tight">東京みらい不動産</span>
               </div>
             </Link>
             <div className="hidden lg:block h-6 w-[1px] bg-slate-200 ml-2"></div>
             <span className="hidden lg:inline text-xs font-bold text-slate-500 ml-2">
               物件確認・内見受付・現況管理
             </span>
+            {/* 役割バッジ: 狭い画面では切替ボタンの選択状態で判別できるため隠す */}
             {isAdmin && (
-              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 shadow-sm">
+              <span className="hidden sm:inline-block whitespace-nowrap text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 shadow-sm">
                 社内管理
               </span>
             )}
             {isBroker && (
-              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 shadow-sm">
+              <span className="hidden sm:inline-block whitespace-nowrap text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 shadow-sm">
                 仲介会社窓口
               </span>
             )}
           </div>
 
           {/* Controls & Profile Container */}
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {/* Quick Roll Switcher */}
             <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-250/60 shadow-inner">
               <Link
                 href="/admin"
-                className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${
+                title="社内管理"
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all duration-200 ${
                   isAdmin
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                     : 'text-slate-600 hover:text-slate-800 hover:bg-slate-200/50'
                 }`}
               >
                 <span>🏢</span>
-                <span>社内管理</span>
+                <span className="hidden sm:inline">社内管理</span>
               </Link>
               <Link
                 href="/broker"
-                className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${
+                title="仲介会社向け"
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all duration-200 ${
                   isBroker
                     ? 'bg-gradient-to-r from-blue-600 to-emerald-600 text-white shadow-md shadow-emerald-500/20'
                     : 'text-slate-600 hover:text-slate-800 hover:bg-slate-200/50'
                 }`}
               >
                 <span>🤝</span>
-                <span>仲介会社向け</span>
+                <span className="hidden sm:inline">仲介会社向け</span>
               </Link>
             </div>
 

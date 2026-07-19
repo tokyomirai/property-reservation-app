@@ -38,6 +38,7 @@ export default function PropertyDetailPage({ params }: PageProps) {
     preferredDate: '',
     preferredTime: '',
     notes: '',
+    website: '', // ハニーポット（ボット対策・人間は入力しない）
   });
 
   useEffect(() => {
@@ -81,11 +82,14 @@ export default function PropertyDetailPage({ params }: PageProps) {
         preferredDate: formData.preferredDate,
         preferredTime: formData.preferredTime,
         notes: formData.notes,
+        website: formData.website,
       }),
     })
-      .then((res) => {
+      .then(async (res) => {
         if (!res.ok) {
-          throw new Error('Failed to submit reservation');
+          // サーバー側の理由（レート制限・入力エラー等）をそのまま案内する
+          const data = await res.json().catch(() => null);
+          throw new Error(data?.error || '予約の送信に失敗しました。入力内容を確認の上、再度お試しください。');
         }
         return res.json();
       })
@@ -94,7 +98,7 @@ export default function PropertyDetailPage({ params }: PageProps) {
       })
       .catch((err) => {
         console.error(err);
-        alert('予約の送信に失敗しました。入力内容を確認の上、再度お試しください。');
+        alert(err?.message || '予約の送信に失敗しました。入力内容を確認の上、再度お試しください。');
       });
   };
 
@@ -270,6 +274,18 @@ export default function PropertyDetailPage({ params }: PageProps) {
                   onChange={e => setFormData({...formData, notes: e.target.value})}
                 />
               </div>
+
+              {/* ハニーポット: 人間には見えない項目。ボットが入力するとスパムとして弾く */}
+              <input
+                type="text"
+                name="website"
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                className="hidden"
+                value={formData.website}
+                onChange={e => setFormData({...formData, website: e.target.value})}
+              />
 
               <div className="pt-4">
                 <button

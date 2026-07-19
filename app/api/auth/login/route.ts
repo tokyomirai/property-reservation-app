@@ -1,4 +1,4 @@
-import { type NextRequest } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 
@@ -13,6 +13,9 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  // CSRF対策: ランダムな state を発行し、Cookieにも保存してコールバックで照合する
+  const state = crypto.randomUUID();
+
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
@@ -20,7 +23,16 @@ export async function GET(request: NextRequest) {
     scope: 'openid email profile',
     access_type: 'online',
     prompt: 'select_account',
+    state,
   });
 
-  return Response.redirect(`${GOOGLE_AUTH_URL}?${params.toString()}`);
+  const response = NextResponse.redirect(`${GOOGLE_AUTH_URL}?${params.toString()}`);
+  response.cookies.set('oauth_state', state, {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 600, // 10分で失効
+    secure: appUrl.startsWith('https'),
+  });
+  return response;
 }

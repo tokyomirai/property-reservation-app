@@ -8,10 +8,17 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
   const error = searchParams.get('error');
+  const state = searchParams.get('state');
 
   // Googleがキャンセルまたはエラーを返した場合
   if (error || !code) {
     return NextResponse.redirect(`${appUrl}/admin?error=cancelled`);
+  }
+
+  // CSRF対策: ログイン開始時に発行した state と一致するか検証する
+  const expectedState = request.cookies.get('oauth_state')?.value;
+  if (!expectedState || !state || state !== expectedState) {
+    return NextResponse.redirect(`${appUrl}/admin?error=state_mismatch`);
   }
 
   try {
@@ -45,13 +52,13 @@ export async function GET(request: NextRequest) {
     }
 
     const userInfo = await userResponse.json();
-    console.log('Google UserInfo response:', JSON.stringify(userInfo));
 
     const email = (userInfo && typeof userInfo.email === 'string') ? userInfo.email : '';
 
-    // 3. ドメイン検証
-    if (!email || !email.endsWith(`@${ALLOWED_DOMAIN}`)) {
-      return NextResponse.redirect(`${appUrl}/admin?error=domain_mismatch&email=${encodeURIComponent(email)}`);
+    // 3. ドメイン検証（メール確認済みであることも必須にする）
+    if (!email || userInfo.email_verified !== true || !email.endsWith(`@${ALLOWED_DOMAIN}`)) {
+      // メールアドレスはURLに載せない（履歴・ログへの残留を避ける）
+      return NextResponse.redirect(`${appUrl}/admin?error=domain_mismatch`);
     }
 
     // 4. JWTセッションを作成してCookieにセット
@@ -79,6 +86,8 @@ export async function GET(request: NextRequest) {
       maxAge: 28800,
       secure: appUrl.startsWith('https'),
     });
+    // 使い捨ての state は破棄する（再利用防止）
+    response.cookies.set('oauth_state', '', { path: '/', maxAge: 0 });
     return response;
   } catch (e) {
     console.error('OAuth callback error:', e);

@@ -153,13 +153,8 @@ export default function ReservationStatusPage({ params }: PageProps) {
               <span className="text-3xl">🔒</span>
               <h3 className="text-sm font-bold text-amber-600">社内確認中</h3>
               <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed font-medium">
-                重要セキュリティ情報（キーボックス暗証番号・設置場所）は、社内担当者の承認後にここに開示されます。
+                キーボックス暗証番号・設置場所は、社内担当者の承認後にここに開示されます。
               </p>
-              <div className="pt-2">
-                <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-200 animate-pulse">
-                  1.5秒ごとに自動更新中... (管理画面で承認すると即座に切り替わります)
-                </span>
-              </div>
             </div>
           )}
 

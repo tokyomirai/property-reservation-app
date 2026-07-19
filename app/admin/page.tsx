@@ -1024,8 +1024,8 @@ export default function AdminPage() {
         const prop = getPropertyForReservation(selectedReservationForMail.propertyId);
         return (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white border border-slate-200 rounded-xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-              <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+            <div className="bg-white border border-slate-200 rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+              <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center shrink-0">
                 <h3 className="text-lg font-bold text-emerald-600 flex items-center gap-2">
                   <span>✉️</span> 自動メール送信シミュレーター
                 </h3>
@@ -1037,19 +1037,19 @@ export default function AdminPage() {
                 </button>
               </div>
               
-              <div className="p-6 space-y-4">
+              <div className="p-6 space-y-4 overflow-y-auto flex-1">
                 <p className="text-xs text-slate-500 font-medium">
                   ※ 内見承認が完了しました。システムより仲介業者様宛に以下のメールが自動送信されています。
                 </p>
 
-                <div className="bg-slate-955 border border-slate-900 rounded-lg p-4 font-mono text-xs text-slate-350 space-y-3 shadow-inner">
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 font-mono text-xs text-slate-700 space-y-3 shadow-inner">
                   <div>
-                    <span className="text-slate-550">件名:</span> <span className="text-slate-100 font-bold">【内見確定】内見のご案内と鍵情報のお知らせ（東京みらい不動産）</span>
+                    <span className="text-slate-500">件名:</span> <span className="text-slate-900 font-bold">【内見確定】内見のご案内と鍵情報のお知らせ（東京みらい不動産）</span>
                   </div>
                   <div>
-                    <span className="text-slate-550">宛先:</span> <span className="text-indigo-400 font-bold">{selectedReservationForMail.email}</span> ({selectedReservationForMail.companyName} {selectedReservationForMail.agentName}様)
+                    <span className="text-slate-500">宛先:</span> <span className="text-indigo-600 font-bold">{selectedReservationForMail.email}</span> ({selectedReservationForMail.companyName} {selectedReservationForMail.agentName}様)
                   </div>
-                  <div className="border-t border-slate-800 pt-3 text-slate-300 whitespace-pre-wrap leading-relaxed">
+                  <div className="border-t border-slate-200 pt-3 text-slate-800 whitespace-pre-wrap leading-relaxed">
 {`${selectedReservationForMail.companyName}
 ${selectedReservationForMail.agentName} 様
 
@@ -1081,15 +1081,16 @@ ${prop?.hasKeyBox === 'あり' ? `【キーボックス番号】 ${prop.keyBoxNu
 --------------------------------------------------`}
                   </div>
                 </div>
+              </div>
 
-                <div className="text-right">
-                  <button
-                    onClick={() => setSelectedReservationForMail(null)}
-                    className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs tracking-wide shadow-sm"
-                  >
-                    閉じる
-                  </button>
-                </div>
+              {/* フッター（常に表示・スクロールしても隠れない） */}
+              <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 text-right shrink-0">
+                <button
+                  onClick={() => setSelectedReservationForMail(null)}
+                  className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs tracking-wide shadow-sm"
+                >
+                  閉じる
+                </button>
               </div>
             </div>
           </div>

@@ -1057,17 +1057,20 @@ ${selectedReservationForMail.agentName} 様
 東京みらい不動産でございます。
 
 お申込みいただきました下記物件の内見希望につきまして、以下の通りご案内を確定いたしました。
-現地キーボックスの解除番号、設置場所をお知らせいたします。
 
 ■ 内見概要
 【物件名】 ${selectedReservationForMail.propertyName}
 【日時】 ${selectedReservationForMail.preferredDate} ${selectedReservationForMail.preferredTime}
 【予約詳細照会URL】 ${window.location.origin}/broker/reservation/${selectedReservationForMail.id}
 
-■ 鍵情報（キーボックス解除番号）
-${prop?.hasKeyBox === 'あり' ? `【キーボックス番号】 ${prop.keyBoxNumber || '未設定'}
-【解除番号】 ${prop.unlockCode || '未設定'}
-【設置場所】 ${prop.setupLocation || '未設定'}` : '【鍵の受渡】 キーボックスはございません。社内管理画面より受渡方法をご確認ください。'}
+■ 鍵の受け渡しについて
+${prop?.hasKeyBox === 'あり' ? `本物件はキーボックスでの鍵受け渡しとなります。
+キーボックスの暗証番号・設置場所は、下記の予約詳細ページにてご確認ください。
+
+　${window.location.origin}/broker/reservation/${selectedReservationForMail.id}
+
+※ セキュリティ保護のため、鍵情報は【内見日の前日から当日まで】のみ表示されます。
+※ 内見日の前日になりましたら、上記ページを開いてご確認ください。` : '本物件はキーボックスを使用しない鍵受け渡しとなります。担当者より別途ご案内いたします。'}
 
 ■ 注意事項
 ・内見終了後は、必ずキーボックスに鍵を戻し、ダイヤルをランダムに回して施錠を確認してください。

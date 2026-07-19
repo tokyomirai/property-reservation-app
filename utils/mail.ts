@@ -122,14 +122,20 @@ export async function sendApprovalEmail(reservation: Reservation, property: KeyI
 
   const subject = '【内見確定】内見のご案内と鍵情報のお知らせ（東京みらい不動産）';
 
+  // セキュリティ保護のため、鍵情報（解除番号等）はメール本文には記載しない。
+  // メールは永久に受信箱へ残り、転送も容易なため、鍵情報は期間限定のWeb画面でのみ開示する。
   const keyBlock =
     property?.hasKeyBox === 'あり'
       ? [
-          `【キーボックス番号】 ${property.keyBoxNumber || '未設定'}`,
-          `【解除番号】 ${property.unlockCode || '未設定'}`,
-          `【設置場所】 ${property.setupLocation || '未設定'}`,
+          '本物件はキーボックスでの鍵受け渡しとなります。',
+          'キーボックスの暗証番号・設置場所は、下記の予約詳細ページにてご確認ください。',
+          '',
+          `　${detailUrl}`,
+          '',
+          '※ セキュリティ保護のため、鍵情報は【内見日の前日から当日まで】のみ表示されます。',
+          '※ 内見日の前日になりましたら、上記ページを開いてご確認ください。',
         ].join('\n')
-      : '【鍵の受渡】 キーボックスはございません。担当者より別途ご案内いたします。';
+      : '本物件はキーボックスを使用しない鍵受け渡しとなります。担当者より別途ご案内いたします。';
 
   const text = [
     `${reservation.companyName}`,
@@ -139,14 +145,13 @@ export async function sendApprovalEmail(reservation: Reservation, property: KeyI
     '東京みらい不動産でございます。',
     '',
     'お申込みいただきました下記物件の内見希望につきまして、以下の通りご案内を確定いたしました。',
-    '現地キーボックスの解除番号、設置場所をお知らせいたします。',
     '',
     '■ 内見概要',
     `【物件名】 ${reservation.propertyName}`,
     `【日時】 ${reservation.preferredDate} ${reservation.preferredTime}`,
     `【予約詳細照会URL】 ${detailUrl}`,
     '',
-    '■ 鍵情報（キーボックス解除番号）',
+    '■ 鍵の受け渡しについて',
     keyBlock,
     '',
     '■ 注意事項',

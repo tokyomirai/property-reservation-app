@@ -26,6 +26,7 @@ interface Reservation {
   notes: string;
   status: string;
   createdAt: string;
+  keyDisclosure?: '開示中' | '未承認' | '期間前' | '期間終了' | '日付不明';
 }
 
 interface PageProps {
@@ -172,13 +173,40 @@ export default function ReservationStatusPage({ params }: PageProps) {
             </div>
           )}
 
-          {isApproved && (
+          {isApproved && reservation.keyDisclosure === '期間前' && (
+            <div className="py-8 px-4 rounded-lg bg-slate-50 border border-slate-200 border-dashed text-center space-y-2">
+              <span className="text-3xl">🗓️</span>
+              <h3 className="text-sm font-bold text-slate-700">鍵情報は内見日が近づくと表示されます</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed font-medium">
+                セキュリティ保護のため、キーボックスの暗証番号・設置場所は
+                <strong className="text-slate-700">内見日の前日から</strong>このページに表示されます。
+                <br />
+                内見日：<strong className="text-slate-700">{reservation.preferredDate} {reservation.preferredTime}</strong>
+                <br />
+                前日になりましたら、本ページを再度開いてご確認ください。
+              </p>
+            </div>
+          )}
+
+          {isApproved && (reservation.keyDisclosure === '期間終了' || reservation.keyDisclosure === '日付不明') && (
+            <div className="py-8 px-4 rounded-lg bg-slate-50 border border-slate-200 border-dashed text-center space-y-2">
+              <span className="text-3xl">🔒</span>
+              <h3 className="text-sm font-bold text-slate-700">鍵情報の表示期間は終了しました</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed font-medium">
+                セキュリティ保護のため、鍵情報の表示は内見日の前後のみに限定されています。
+                <br />
+                再度ご確認が必要な場合は、お手数ですが弊社担当者までお問い合わせください。
+              </p>
+            </div>
+          )}
+
+          {isApproved && reservation.keyDisclosure === '開示中' && (
             <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
               <div className="p-5 rounded-lg bg-emerald-50 border border-emerald-200 space-y-3">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700">
                   <span>🔓</span> 承認済み - 鍵情報開示
                 </div>
-                
+
                 {property?.hasKeyBox === 'あり' ? (
                   <div className="grid grid-cols-2 gap-4 text-xs sm:text-sm font-bold text-slate-800">
                     <div>

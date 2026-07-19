@@ -98,6 +98,7 @@ export default function Header() {
                 }`}
               >
                 <span>🏢</span>
+                <span className="sm:hidden">社内</span>
                 <span className="hidden sm:inline">社内管理</span>
               </Link>
               <Link
@@ -110,6 +111,7 @@ export default function Header() {
                 }`}
               >
                 <span>🤝</span>
+                <span className="sm:hidden">仲介</span>
                 <span className="hidden sm:inline">仲介会社向け</span>
               </Link>
             </div>

@@ -130,10 +130,10 @@ export default function ReservationStatusPage({ params }: PageProps) {
                isRejected ? '内見予約をお受けできませんでした' : 
                '内見予約の申込みを受付いたしました'}
             </h1>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-lg mx-auto leading-relaxed">
-              {isPending && '現在、社内にて予約内容の確認を行っております。このまましばらくお待ちいただくか、本ページをブックマークして後ほどご確認ください。'}
-              {isApproved && 'ご案内情報が確定しました。現地キーボックス等の鍵情報を開示いたします。'}
-              {isRejected && '大変申し訳ございませんが、ご希望の日程でのご案内が難しいため予約を却下いたしました。詳細はお電話にてお問い合わせください。'}
+            <p className="text-xs sm:text-sm text-slate-600 font-medium max-w-lg mx-auto leading-relaxed">
+              {isPending && '現在、社内にて予約内容を確認しております。承認され次第、このページに鍵情報が表示されます。'}
+              {isApproved && '内見のご案内が確定しました。鍵情報は内見日の前日から、このページに表示されます。'}
+              {isRejected && 'ご希望の日程でのご案内が難しいため、今回はお受けできませんでした。詳細はお電話にてお問い合わせください。'}
             </p>
           </div>
 

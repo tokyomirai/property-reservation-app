@@ -92,3 +92,22 @@ export async function PATCH(
     return Response.json({ error: 'Reservation not found' }, { status: 404 });
   }
 }
+
+// DELETE: 予約削除（管理者のみ）
+// テストデータの整理など、不要になった予約レコードを削除する
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getSession();
+  if (!session) return unauthorized();
+
+  const { id } = await params;
+
+  try {
+    await prisma.reservation.delete({ where: { id } });
+    return Response.json({ success: true });
+  } catch {
+    return Response.json({ error: 'Reservation not found' }, { status: 404 });
+  }
+}

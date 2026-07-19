@@ -218,6 +218,24 @@ export default function AdminPage() {
     }
   };
 
+  // 予約データ削除（テストデータの整理用）
+  const handleDeleteReservation = async (resId: string, label: string) => {
+    if (!confirm(`予約データを削除します。\n\n【${label}】\n\nこの操作は取り消せません。よろしいですか？`)) return;
+
+    try {
+      const res = await fetch(`/api/reservations/${resId}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) {
+        throw new Error('Failed to delete reservation');
+      }
+      await refreshData();
+    } catch (err) {
+      console.error(err);
+      alert('予約の削除に失敗しました。');
+    }
+  };
+
   const getPropertyForReservation = (propertyId: string) => {
     return properties.find(p => p.id === propertyId);
   };
@@ -534,6 +552,13 @@ export default function AdminPage() {
                                 ✉️ メール確認
                               </button>
                             )}
+                            <button
+                              onClick={() => handleDeleteReservation(res.id, `${res.companyName} / ${res.agentName} 様 (${res.preferredDate})`)}
+                              title="この予約データを削除します"
+                              className="px-2.5 py-1.5 rounded bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 shadow-sm transition-colors font-bold"
+                            >
+                              🗑 削除
+                            </button>
                           </td>
                         </tr>
                       );

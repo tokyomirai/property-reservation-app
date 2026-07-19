@@ -152,7 +152,7 @@ export default function ReservationStatusPage({ params }: PageProps) {
             <div className="py-8 px-4 rounded-lg bg-slate-50 border border-slate-200 border-dashed text-center space-y-2">
               <span className="text-3xl">🔒</span>
               <h3 className="text-sm font-bold text-amber-600">社内確認中</h3>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed font-medium">
+              <p className="text-xs text-slate-600 mx-auto leading-relaxed font-medium">
                 キーボックス暗証番号・設置場所は、社内担当者の承認後にここに開示されます。
               </p>
             </div>

@@ -125,7 +125,7 @@ export default function BrokerPage() {
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredProperties.map((prop) => {
-                const isViewable = prop.viewingStatus === '内見可能';
+                const isViewable = prop.viewingStatus === '内見可能' || prop.viewingStatus === 'リフォーム後の予約受付中';
                 return (
                   <div 
                     key={prop.id}
@@ -151,7 +151,7 @@ export default function BrokerPage() {
                         </span>
                         <span className={`px-2.5 py-0.5 rounded text-[11px] font-bold ${
                           prop.viewingStatus === '内見可能' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                          prop.viewingStatus === '日程調整' ? 'bg-amber-50 text-amber-700 border border-amber-250' :
+                          prop.viewingStatus === 'リフォーム後の予約受付中' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
                           prop.viewingStatus === 'リフォーム中' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
                           'bg-rose-50 text-rose-700 border border-rose-200'
                         }`}>

@@ -63,7 +63,7 @@ export default function PropertyDetailPage({ params }: PageProps) {
     e.preventDefault();
     if (!property) return;
 
-    if (property.viewingStatus !== '内見可能') {
+    if (property.viewingStatus !== '内見可能' && property.viewingStatus !== 'リフォーム後の予約受付中') {
       alert('現在、この物件は内見をお申込みいただけません。');
       return;
     }
@@ -123,7 +123,7 @@ export default function PropertyDetailPage({ params }: PageProps) {
     );
   }
 
-  const isViewable = property.viewingStatus === '内見可能';
+  const isViewable = property.viewingStatus === '内見可能' || property.viewingStatus === 'リフォーム後の予約受付中';
 
   return (
     <div className="flex-1 bg-slate-50 text-slate-800 p-4 sm:p-6 lg:p-8">
@@ -155,7 +155,7 @@ export default function PropertyDetailPage({ params }: PageProps) {
             </span>
             <span className={`px-2.5 py-0.5 rounded text-xs font-bold ${
               property.viewingStatus === '内見可能' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-              property.viewingStatus === '日程調整' ? 'bg-amber-50 text-amber-700 border border-amber-250' :
+              property.viewingStatus === 'リフォーム後の予約受付中' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
               property.viewingStatus === 'リフォーム中' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
               'bg-rose-50 text-rose-700 border border-rose-200'
             }`}>

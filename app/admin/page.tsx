@@ -205,9 +205,14 @@ export default function AdminPage() {
       }
       const updated = await res.json();
       await refreshData();
-      
+
       if (status === '承認済') {
-        setSelectedReservationForMail(updated);
+        if (!updated.emailSent) {
+          // メール送信失敗時はシミュレーターを表示しつつエラーを通知
+          console.error('[admin] メール送信失敗:', updated.emailError);
+          alert(`⚠️ 予約ステータスを承認済にしましたが、メール送信に失敗しました。\n\n原因: ${updated.emailError ?? '不明'}\n\nVercelの環境変数 RESEND_API_KEY が正しく設定されているか確認してください。`);
+        }
+        setSelectedReservationForMail({ ...updated, _emailSent: updated.emailSent, _emailError: updated.emailError });
       }
     } catch (err) {
       console.error(err);
@@ -367,7 +372,7 @@ export default function AdminPage() {
                         <td className="px-4 py-4 whitespace-nowrap">
                           <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
                             prop.viewingStatus === '内見可能' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                            prop.viewingStatus === '日程調整' ? 'bg-amber-50 text-amber-700 border border-amber-250' :
+                            prop.viewingStatus === 'リフォーム後の予約受付中' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
                             prop.viewingStatus === 'リフォーム中' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
                             'bg-rose-50 text-rose-700 border border-rose-200'
                           }`}>
@@ -619,7 +624,7 @@ export default function AdminPage() {
                     onChange={e => setNewProp({...newProp, viewingStatus: e.target.value as any})}
                   >
                     <option value="内見可能">内見可能</option>
-                    <option value="日程調整">日程調整</option>
+                    <option value="リフォーム後の予約受付中">リフォーム後の予約受付中</option>
                     <option value="リフォーム中">リフォーム中</option>
                     <option value="内見不可">内見不可</option>
                   </select>
@@ -833,7 +838,7 @@ export default function AdminPage() {
                     onChange={e => setEditingProperty({...editingProperty, viewingStatus: e.target.value as any})}
                   >
                     <option value="内見可能">内見可能</option>
-                    <option value="日程調整">日程調整</option>
+                    <option value="リフォーム後の予約受付中">リフォーム後の予約受付中</option>
                     <option value="リフォーム中">リフォーム中</option>
                     <option value="内見不可">内見不可</option>
                   </select>
@@ -971,15 +976,19 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* --- モーダル: 自動送信メールシミュレーター --- */}
+      {/* --- モーダル: 送信済みメール確認 --- */}
       {selectedReservationForMail && (() => {
+        const reservationWithMeta = selectedReservationForMail as typeof selectedReservationForMail & { _emailSent?: boolean; _emailError?: string };
         const prop = getPropertyForReservation(selectedReservationForMail.propertyId);
+        const emailSentOk = reservationWithMeta._emailSent !== false; // undefined扱いは古いデータ用
         return (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white border border-slate-200 rounded-xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
               <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
-                <h3 className="text-lg font-bold text-emerald-600 flex items-center gap-2">
-                  <span>✉️</span> 自動メール送信シミュレーター
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  {emailSentOk
+                    ? <><span>✅</span> <span className="text-emerald-600">メール送信完了</span></>
+                    : <><span>❌</span> <span className="text-rose-600">メール送信失敗</span></>}
                 </h3>
                 <button 
                   onClick={() => setSelectedReservationForMail(null)}
@@ -990,9 +999,17 @@ export default function AdminPage() {
               </div>
               
               <div className="p-6 space-y-4">
-                <p className="text-xs text-slate-500 font-medium">
-                  ※ 内見承認が完了しました。システムより仲介業者様宛に以下のメールが自動送信されています。
-                </p>
+                {emailSentOk ? (
+                  <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 font-medium">
+                    ✅ 内見承認が完了しました。仲介業者様宛に以下の内容でメールを送信しました。
+                  </p>
+                ) : (
+                  <div className="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 space-y-1">
+                    <p className="text-xs text-rose-700 font-bold">❌ メール送信に失敗しました</p>
+                    <p className="text-xs text-rose-600">原因: {reservationWithMeta._emailError ?? '不明'}</p>
+                    <p className="text-xs text-rose-500">Vercelの環境変数 RESEND_API_KEY が正しく設定されているか確認してください。</p>
+                  </div>
+                )}
 
                 <div className="bg-slate-955 border border-slate-900 rounded-lg p-4 font-mono text-xs text-slate-350 space-y-3 shadow-inner">
                   <div>
@@ -1027,9 +1044,15 @@ ${prop?.hasKeyBox === 'あり' ? `【キーボックス番号】 ${prop.keyBoxNu
 ・現地備品（スリッパ・売り看板など）は持ち出さないようお願いいたします。
 
 よろしくお願い申し上げます。
+
 --------------------------------------------------
-東京みらい不動産 営業部
-東京都千代田区丸の内1-1-1
+株式会社東京みらい不動産
+
+〒160-0022
+東京都新宿区新宿1丁目17-6
+TEL：03-6457-8925
+FAX：03-6457-8975
+HP：https://www.tokyorf.com/
 --------------------------------------------------`}
                   </div>
                 </div>

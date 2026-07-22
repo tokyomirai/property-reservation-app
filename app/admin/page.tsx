@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import CalendarTab from './CalendarTab';
+import StaffTab from './StaffTab';
+import { COMPANY_NAME, COMPANY_PHONE, CANCEL_NOTICE_TITLE } from '../../utils/company';
 
 interface Property {
   id: string;
@@ -32,16 +35,23 @@ interface Reservation {
   email: string;
   preferredDate: string;
   preferredTime: string;
+  startTime: string;
+  endTime: string;
   notes: string;
   status: string;
   createdAt: string;
+}
+
+/** 開始・終了時間が入っていればそちらを優先（旧データは preferredTime を表示） */
+function timeLabel(res: Reservation): string {
+  return res.startTime && res.endTime ? `${res.startTime}〜${res.endTime}` : res.preferredTime;
 }
 
 export default function AdminPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'properties' | 'reservations'>('properties');
+  const [activeTab, setActiveTab] = useState<'properties' | 'reservations' | 'calendar' | 'staff'>('properties');
   
   // モーダル・編集状態
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
@@ -203,14 +213,16 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
       });
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error('Failed to update reservation status');
+        // 409（重複）はサーバーが返す重複内容をそのまま表示する
+        alert(data?.error || 'ステータスの更新に失敗しました。');
+        return;
       }
-      const updated = await res.json();
       await refreshData();
-      
+
       if (status === '承認済') {
-        setSelectedReservationForMail(updated);
+        setSelectedReservationForMail(data);
       }
     } catch (err) {
       console.error(err);
@@ -303,6 +315,26 @@ export default function AdminPage() {
                 {reservations.filter(r => r.status === '未承認').length}
               </span>
             )}
+          </button>
+          <button
+            onClick={() => setActiveTab('calendar')}
+            className={`px-5 py-4 text-sm font-bold border-b-2 transition-all duration-200 ${
+              activeTab === 'calendar'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-400 hover:text-slate-650'
+            }`}
+          >
+            🗓️ 内見カレンダー（社内）
+          </button>
+          <button
+            onClick={() => setActiveTab('staff')}
+            className={`px-5 py-4 text-sm font-bold border-b-2 transition-all duration-200 ${
+              activeTab === 'staff'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-400 hover:text-slate-650'
+            }`}
+          >
+            👤 担当者マスタ
           </button>
         </div>
 
@@ -517,7 +549,7 @@ export default function AdminPage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-slate-800 font-bold">{res.preferredDate}</div>
-                            <div className="text-slate-500 text-xs">{res.preferredTime}</div>
+                            <div className="text-slate-500 text-xs font-mono">{timeLabel(res)}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
@@ -569,6 +601,14 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+
+        {/* 3. 社内用 内見カレンダータブ */}
+        {activeTab === 'calendar' && (
+          <CalendarTab properties={properties.map(p => ({ id: p.id, name: p.name }))} />
+        )}
+
+        {/* 4. 担当者マスタタブ */}
+        {activeTab === 'staff' && <StaffTab />}
 
       </div>
 
@@ -1049,6 +1089,16 @@ export default function AdminPage() {
                   <div>
                     <span className="text-slate-500">宛先:</span> <span className="text-indigo-600 font-bold">{selectedReservationForMail.email}</span> ({selectedReservationForMail.companyName} {selectedReservationForMail.agentName}様)
                   </div>
+
+                  {/* ① メール最上部に表示される変更・キャンセルの案内 */}
+                  <div className="border-2 border-rose-500 bg-rose-50 rounded-lg p-3.5 space-y-1.5">
+                    <div className="font-bold text-rose-700 text-[13px]">【{CANCEL_NOTICE_TITLE}】</div>
+                    <div className="text-rose-800 leading-relaxed font-sans">
+                      ご予約時間の変更またはキャンセルをご希望の場合は、<strong>システムからの変更はできません。</strong>
+                      お手数ですが、<strong>{COMPANY_NAME}（TEL：{COMPANY_PHONE}）</strong>までお電話にてご連絡ください。
+                    </div>
+                  </div>
+
                   <div className="border-t border-slate-200 pt-3 text-slate-800 whitespace-pre-wrap leading-relaxed">
 {`${selectedReservationForMail.companyName}
 ${selectedReservationForMail.agentName} 様
@@ -1060,8 +1110,12 @@ ${selectedReservationForMail.agentName} 様
 
 ■ 内見概要
 【物件名】 ${selectedReservationForMail.propertyName}
-【日時】 ${selectedReservationForMail.preferredDate} ${selectedReservationForMail.preferredTime}
+【日時】 ${selectedReservationForMail.preferredDate} ${timeLabel(selectedReservationForMail)}
 【予約詳細照会URL】 ${window.location.origin}/broker/reservation/${selectedReservationForMail.id}
+
+■ 担当者連絡先
+会社：${COMPANY_PHONE}
+担当：（担当者マスタに登録された携帯番号）
 
 ■ 鍵の受け渡しについて
 ${prop?.hasKeyBox === 'あり' ? `本物件はキーボックスでの鍵受け渡しとなります。
@@ -1090,6 +1144,11 @@ TEL：03-6457-8925
 FAX：03-6457-8975
 HP：https://www.tokyorf.com/
 --------------------------------------------------`}
+                  </div>
+
+                  {/* ⑦ 担当者マスタに名刺が登録されていれば添付される */}
+                  <div className="border-t border-slate-200 pt-3 text-[11px] text-slate-500 font-sans">
+                    📎 添付：物件の担当営業に名刺が登録されている場合、承認メールへ自動添付されます（担当者マスタで設定）。
                   </div>
                 </div>
               </div>

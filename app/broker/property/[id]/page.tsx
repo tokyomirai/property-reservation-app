@@ -36,10 +36,13 @@ export default function PropertyDetailPage({ params }: PageProps) {
     phone: '',
     email: '',
     preferredDate: '',
-    preferredTime: '',
+    startTime: '',
+    endTime: '',
     notes: '',
     website: '', // ハニーポット（ボット対策・人間は入力しない）
   });
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
 
   useEffect(() => {
     fetch(`/api/properties/${id}`)
@@ -61,12 +64,20 @@ export default function PropertyDetailPage({ params }: PageProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!property) return;
+    if (!property || submitting) return;
 
     if (property.viewingStatus !== '内見可能' && property.viewingStatus !== 'リフォーム後の予約受付中') {
-      alert('現在、この物件は内見をお申込みいただけません。');
+      setFormError('現在、この物件は内見をお申込みいただけません。');
       return;
     }
+
+    if (formData.endTime <= formData.startTime) {
+      setFormError('終了時間は開始時間より後の時刻をご指定ください。');
+      return;
+    }
+
+    setFormError('');
+    setSubmitting(true);
 
     fetch('/api/reservations', {
       method: 'POST',
@@ -80,14 +91,15 @@ export default function PropertyDetailPage({ params }: PageProps) {
         phone: formData.phone,
         email: formData.email,
         preferredDate: formData.preferredDate,
-        preferredTime: formData.preferredTime,
+        startTime: formData.startTime,
+        endTime: formData.endTime,
         notes: formData.notes,
         website: formData.website,
       }),
     })
       .then(async (res) => {
         if (!res.ok) {
-          // サーバー側の理由（レート制限・入力エラー等）をそのまま案内する
+          // サーバー側の理由（重複・レート制限・入力エラー等）をそのまま案内する
           const data = await res.json().catch(() => null);
           throw new Error(data?.error || '予約の送信に失敗しました。入力内容を確認の上、再度お試しください。');
         }
@@ -98,7 +110,8 @@ export default function PropertyDetailPage({ params }: PageProps) {
       })
       .catch((err) => {
         console.error(err);
-        alert(err?.message || '予約の送信に失敗しました。入力内容を確認の上、再度お試しください。');
+        setFormError(err?.message || '予約の送信に失敗しました。入力内容を確認の上、再度お試しください。');
+        setSubmitting(false);
       });
   };
 
@@ -236,7 +249,8 @@ export default function PropertyDetailPage({ params }: PageProps) {
                 </div>
               </div>
 
-              <div className="grid sm:grid-cols-2 gap-4">
+              {/* 内見希望日 ＋ 開始/終了時間 */}
+              <div className="grid sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">内見希望日 <span className="text-rose-500">*</span></label>
                   <input
@@ -248,21 +262,31 @@ export default function PropertyDetailPage({ params }: PageProps) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">内見希望時間 <span className="text-rose-500">*</span></label>
-                  <select
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">開始時間 <span className="text-rose-500">*</span></label>
+                  <input
+                    type="time"
                     required
+                    step={900}
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-855 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
-                    value={formData.preferredTime}
-                    onChange={e => setFormData({...formData, preferredTime: e.target.value})}
-                  >
-                    <option value="">-- 希望時間を選択 --</option>
-                    <option value="10:00〜12:00">10:00〜12:00</option>
-                    <option value="12:00〜14:00">12:00〜14:00</option>
-                    <option value="14:00〜16:00">14:00〜16:00</option>
-                    <option value="16:00〜18:00">16:00〜18:00</option>
-                  </select>
+                    value={formData.startTime}
+                    onChange={e => setFormData({...formData, startTime: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">終了時間 <span className="text-rose-500">*</span></label>
+                  <input
+                    type="time"
+                    required
+                    step={900}
+                    className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-855 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                    value={formData.endTime}
+                    onChange={e => setFormData({...formData, endTime: e.target.value})}
+                  />
                 </div>
               </div>
+              <p className="text-[11px] text-slate-500 -mt-1">
+                例）開始 10:00 ／ 終了 11:00　※ 既に予約が入っている時間帯はお申込みいただけません。
+              </p>
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">その他連絡事項</label>
@@ -287,12 +311,20 @@ export default function PropertyDetailPage({ params }: PageProps) {
                 onChange={e => setFormData({...formData, website: e.target.value})}
               />
 
+              {/* 重複・入力エラーの案内 */}
+              {formError && (
+                <div className="p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs sm:text-sm font-semibold whitespace-pre-wrap leading-relaxed">
+                  ⚠️ {formError}
+                </div>
+              )}
+
               <div className="pt-4">
                 <button
                   type="submit"
-                  className="w-full px-5 py-3 rounded-lg bg-gradient-to-r from-blue-600 to-emerald-600 hover:opacity-95 text-white font-bold text-sm tracking-wide shadow-md shadow-emerald-600/10 transition-all duration-200"
+                  disabled={submitting}
+                  className="w-full px-5 py-3 rounded-lg bg-gradient-to-r from-blue-600 to-emerald-600 hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-sm tracking-wide shadow-md shadow-emerald-600/10 transition-all duration-200"
                 >
-                  予約申込みを送信する
+                  {submitting ? '送信中...' : '予約申込みを送信する'}
                 </button>
               </div>
             </form>

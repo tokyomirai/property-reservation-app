@@ -2,6 +2,7 @@ import { prisma } from '../../../utils/db';
 import { getSession, unauthorized } from '../../../utils/session';
 import { sendReservationEmail } from '../../../utils/mail';
 import { rateLimit, getClientIp } from '../../../utils/rateLimit';
+import { validateSlot, findConflicts, conflictMessage, formatTimeRange } from '../../../utils/schedule';
 import { type NextRequest } from 'next/server';
 
 // GET: 予約一覧（管理者のみ）
@@ -28,7 +29,8 @@ const MAX_LEN: Record<string, number> = {
   phone: 30,
   email: 254,
   preferredDate: 20,
-  preferredTime: 40,
+  startTime: 5,
+  endTime: 5,
   notes: 1000,
 };
 
@@ -60,12 +62,19 @@ export async function POST(request: NextRequest) {
     phone: toStr(body.phone),
     email: toStr(body.email),
     preferredDate: toStr(body.preferredDate),
-    preferredTime: toStr(body.preferredTime),
+    startTime: toStr(body.startTime),
+    endTime: toStr(body.endTime),
     notes: toStr(body.notes),
   };
 
   if (!body.propertyId || !fields.companyName || !fields.agentName || !fields.email) {
     return Response.json({ error: 'Required fields missing' }, { status: 400 });
+  }
+
+  // ④ 内見希望は開始時間・終了時間の2項目で受け付ける
+  const slotError = validateSlot(fields.preferredDate, fields.startTime, fields.endTime);
+  if (slotError) {
+    return Response.json({ error: slotError }, { status: 400 });
   }
 
   for (const [key, max] of Object.entries(MAX_LEN)) {
@@ -101,6 +110,20 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'Property not found or not available' }, { status: 404 });
   }
 
+  // ③ 確定済みの内見予約・社内案内予約と時間帯が重なる申込みは受け付けない
+  const conflicts = await findConflicts(
+    body.propertyId,
+    fields.preferredDate,
+    fields.startTime,
+    fields.endTime
+  );
+  if (conflicts.length > 0) {
+    return Response.json(
+      { error: conflictMessage(fields.preferredDate, conflicts), conflicts },
+      { status: 409 }
+    );
+  }
+
   const reservation = await prisma.reservation.create({
     data: {
       propertyId: body.propertyId,
@@ -110,7 +133,9 @@ export async function POST(request: NextRequest) {
       phone: fields.phone,
       email: fields.email,
       preferredDate: fields.preferredDate,
-      preferredTime: fields.preferredTime,
+      preferredTime: formatTimeRange(fields.startTime, fields.endTime),
+      startTime: fields.startTime,
+      endTime: fields.endTime,
       notes: fields.notes,
     },
   });

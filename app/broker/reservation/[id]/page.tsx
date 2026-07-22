@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
+import { COMPANY_NAME, COMPANY_PHONE, CANCEL_NOTICE_TITLE } from '../../../../utils/company';
 
 interface Property {
   id: string;
@@ -11,6 +12,12 @@ interface Property {
   keyBoxNumber: string | null;
   unlockCode: string | null;
   setupLocation: string | null;
+}
+
+interface Contact {
+  companyPhone: string;
+  repName: string;
+  repPhone: string;
 }
 
 interface Reservation {
@@ -23,10 +30,13 @@ interface Reservation {
   email: string;
   preferredDate: string;
   preferredTime: string;
+  startTime: string;
+  endTime: string;
   notes: string;
   status: string;
   createdAt: string;
   keyDisclosure?: '開示中' | '未承認' | '期間前' | '期間終了' | '日付不明';
+  contact?: Contact;
 }
 
 interface PageProps {
@@ -95,6 +105,16 @@ export default function ReservationStatusPage({ params }: PageProps) {
   const isRejected = reservation.status === '却下';
   const isPending = reservation.status === '未承認';
 
+  // 開始・終了時間が入っていればそちらを優先（旧データは preferredTime を表示）
+  const timeLabel =
+    reservation.startTime && reservation.endTime
+      ? `${reservation.startTime}〜${reservation.endTime}`
+      : reservation.preferredTime;
+
+  const companyPhone = reservation.contact?.companyPhone || COMPANY_PHONE;
+  const repPhone = reservation.contact?.repPhone ?? '';
+  const repName = reservation.contact?.repName ?? '';
+
   return (
     <div className="flex-1 bg-slate-50 text-slate-800 p-4 sm:p-6 lg:p-8">
       <div className="max-w-2xl mx-auto space-y-6">
@@ -142,6 +162,58 @@ export default function ReservationStatusPage({ params }: PageProps) {
           </div>
         </div>
 
+        {/* ① 変更・キャンセルは電話受付のみである旨の案内（却下時は不要） */}
+        {!isRejected && (
+          <div className="bg-rose-50 border-2 border-rose-500 rounded-xl p-5 sm:p-6 shadow-md space-y-2">
+            <h2 className="text-sm sm:text-base font-extrabold text-rose-700 flex items-center gap-2">
+              <span>📞</span> 【{CANCEL_NOTICE_TITLE}】
+            </h2>
+            <p className="text-xs sm:text-sm text-rose-800 leading-relaxed font-medium">
+              ご予約時間の変更またはキャンセルをご希望の場合は、
+              <strong className="font-extrabold">システムからの変更はできません。</strong>
+              <br />
+              お手数ですが、<strong className="font-extrabold">{COMPANY_NAME}</strong>までお電話にてご連絡ください。
+            </p>
+            <a
+              href={`tel:${companyPhone.replace(/-/g, '')}`}
+              className="inline-flex items-center gap-2 mt-1 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm shadow-sm transition-colors"
+            >
+              <span>TEL：{companyPhone}</span>
+            </a>
+          </div>
+        )}
+
+        {/* ⑥ 会社代表番号・担当者携帯番号の両方を表示 */}
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-md space-y-4">
+          <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-2.5 flex items-center gap-1.5">
+            <span>☎️</span> お問い合わせ先
+          </h2>
+          <table className="w-full text-left text-xs sm:text-sm">
+            <tbody className="divide-y divide-slate-100">
+              <tr>
+                <td className="py-2.5 text-slate-400 font-medium w-28">会社</td>
+                <td className="py-2.5">
+                  <a href={`tel:${companyPhone.replace(/-/g, '')}`} className="text-slate-850 font-bold font-mono hover:text-indigo-600">
+                    {companyPhone}
+                  </a>
+                </td>
+              </tr>
+              {repPhone && (
+                <tr>
+                  <td className="py-2.5 text-slate-400 font-medium">
+                    担当{repName && <span className="block text-[11px] text-slate-500 mt-0.5">{repName}</span>}
+                  </td>
+                  <td className="py-2.5">
+                    <a href={`tel:${repPhone.replace(/-/g, '')}`} className="text-slate-850 font-bold font-mono hover:text-indigo-600">
+                      {repPhone}
+                    </a>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
         {/* Key Information Opening Control (CRITICAL REQUIREMENT) */}
         <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-md space-y-4">
           <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-2.5 flex items-center gap-1.5">
@@ -176,7 +248,7 @@ export default function ReservationStatusPage({ params }: PageProps) {
                 セキュリティ保護のため、キーボックスの暗証番号・設置場所は
                 <strong className="text-slate-700">内見日の前日から</strong>このページに表示されます。
                 <br />
-                内見日：<strong className="text-slate-700">{reservation.preferredDate} {reservation.preferredTime}</strong>
+                内見日：<strong className="text-slate-700">{reservation.preferredDate} {timeLabel}</strong>
                 <br />
                 前日になりましたら、本ページを再度開いてご確認ください。
               </p>
@@ -262,7 +334,7 @@ export default function ReservationStatusPage({ params }: PageProps) {
               </tr>
               <tr>
                 <td className="py-2.5 text-slate-400 font-medium">希望日時</td>
-                <td className="py-2.5 text-slate-800 font-bold">{reservation.preferredDate} {reservation.preferredTime}</td>
+                <td className="py-2.5 text-slate-800 font-bold">{reservation.preferredDate} {timeLabel}</td>
               </tr>
               <tr>
                 <td className="py-2.5 text-slate-400 font-medium">その他連絡事項</td>

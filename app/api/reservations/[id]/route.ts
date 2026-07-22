@@ -1,6 +1,9 @@
 import { prisma } from '../../../../utils/db';
 import { getSession, unauthorized } from '../../../../utils/session';
 import { sendApprovalEmail } from '../../../../utils/mail';
+import { createCalendarEvent } from '../../../../utils/lineworks';
+import { findConflicts, conflictMessage } from '../../../../utils/schedule';
+import { COMPANY_PHONE } from '../../../../utils/company';
 import { type NextRequest } from 'next/server';
 
 // 鍵情報の開示ステータス
@@ -50,6 +53,7 @@ export async function GET(
           name: true,
           address: true,
           hasKeyBox: true,
+          salesRepEmail: true,
           // 鍵情報は承認後のみ付与（後述のロジックで制御）
           keyBoxNumber: true,
           unlockCode: true,
@@ -67,9 +71,23 @@ export async function GET(
   const keyDisclosure = getKeyDisclosure(reservation.status, reservation.preferredDate);
   const canSeeKey = session ? true : keyDisclosure === '開示中';
 
+  // ⑥ 予約詳細画面に会社代表番号・担当者携帯番号を表示するため担当者情報を付与する。
+  //    メールアドレスは公開しない（電話番号と氏名のみ）。
+  const salesRepEmail = (reservation.property?.salesRepEmail ?? '').trim();
+  const staff = salesRepEmail
+    ? await prisma.staff.findUnique({ where: { email: salesRepEmail } })
+    : null;
+  const contact = {
+    companyPhone: (staff?.companyPhone ?? '').trim() || COMPANY_PHONE,
+    repName: staff?.name ?? '',
+    repPhone: staff?.mobilePhone ?? '',
+  };
+
   const safeProperty = reservation.property
     ? {
         ...reservation.property,
+        // 担当営業メールは社内情報のため公開側には返さない
+        salesRepEmail: session ? reservation.property.salesRepEmail : undefined,
         keyBoxNumber: canSeeKey ? reservation.property.keyBoxNumber : null,
         unlockCode: canSeeKey ? reservation.property.unlockCode : null,
         setupLocation: canSeeKey ? reservation.property.setupLocation : null,
@@ -80,6 +98,7 @@ export async function GET(
     ...reservation,
     property: safeProperty,
     keyDisclosure,
+    contact,
   });
 }
 
@@ -98,6 +117,29 @@ export async function PATCH(
     return Response.json({ error: 'Invalid status' }, { status: 400 });
   }
 
+  const existing = await prisma.reservation.findUnique({ where: { id } });
+  if (!existing) {
+    return Response.json({ error: 'Reservation not found' }, { status: 404 });
+  }
+
+  // ③ 承認時点で他の確定予約と枠が重なっていないか再確認する。
+  //    （申込～承認の間に社内案内予約などが入るケースがあるため）
+  if (body.status === '承認済') {
+    const conflicts = await findConflicts(
+      existing.propertyId,
+      existing.preferredDate,
+      existing.startTime,
+      existing.endTime,
+      { excludeReservationId: id }
+    );
+    if (conflicts.length > 0) {
+      return Response.json(
+        { error: conflictMessage(existing.preferredDate, conflicts), conflicts },
+        { status: 409 }
+      );
+    }
+  }
+
   try {
     const reservation = await prisma.reservation.update({
       where: { id },
@@ -109,15 +151,43 @@ export async function PATCH(
             keyBoxNumber: true,
             unlockCode: true,
             setupLocation: true,
+            salesRepEmail: true,
           },
         },
       },
     });
 
-    // 「承認済」になったら、申込者へ内見確定・鍵情報メールを送信
-    // （メール送信失敗は承認処理自体を止めない）
     if (body.status === '承認済') {
-      await sendApprovalEmail(reservation, reservation.property);
+      // ⑥⑦ 承認メールに載せる担当者の電話番号・名刺データを担当者マスタから取得
+      const salesRepEmail = (reservation.property?.salesRepEmail ?? '').trim();
+      const staff = salesRepEmail
+        ? await prisma.staff.findUnique({ where: { email: salesRepEmail } })
+        : null;
+
+      // 申込者へ内見確定・鍵情報メールを送信（送信失敗は承認処理自体を止めない）
+      await sendApprovalEmail(reservation, reservation.property, staff);
+
+      // ② 確定した内見予約をLINE WORKSカレンダーへ登録（重複登録は行わない）
+      if (!reservation.calendarEventId) {
+        const eventId = await createCalendarEvent({
+          category: '内見',
+          propertyName: reservation.propertyName,
+          date: reservation.preferredDate,
+          startTime: reservation.startTime,
+          endTime: reservation.endTime,
+          companyName: reservation.companyName,
+          agentName: reservation.agentName,
+          phone: reservation.phone,
+          notes: reservation.notes,
+        });
+        if (eventId !== null) {
+          await prisma.reservation.update({
+            where: { id },
+            // イベントIDが取得できない場合も登録済みの印として値を入れる
+            data: { calendarEventId: eventId || 'registered' },
+          });
+        }
+      }
     }
 
     return Response.json(reservation);

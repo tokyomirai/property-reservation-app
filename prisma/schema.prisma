@@ -7,25 +7,26 @@ datasource db {
 }
 
 model Property {
-  id            String        @id @default(cuid())
-  name          String
-  address       String        @default("")
-  salesStatus   String        @default("販売中")
-  viewingStatus String        @default("内見可能")
-  isPublished   Boolean       @default(true)
-  hasKeyBox     String        @default("")
-  keyBoxNumber  String        @default("")
-  unlockCode    String        @default("")
-  setupLocation String        @default("")
-  hasSlippers   String        @default("")
-  hasSignboard  String        @default("")
-  notes         String        @default("")
-  internalMemo  String        @default("")
-  salesRepEmail String        @default("")
-  lastUpdatedBy String        @default("")
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  reservations  Reservation[]
+  id               String            @id @default(cuid())
+  name             String
+  address          String            @default("")
+  salesStatus      String            @default("販売中")
+  viewingStatus    String            @default("内見可能")
+  isPublished      Boolean           @default(true)
+  hasKeyBox        String            @default("")
+  keyBoxNumber     String            @default("")
+  unlockCode       String            @default("")
+  setupLocation    String            @default("")
+  hasSlippers      String            @default("")
+  hasSignboard     String            @default("")
+  notes            String            @default("")
+  internalMemo     String            @default("")
+  salesRepEmail    String            @default("")
+  lastUpdatedBy    String            @default("")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  reservations     Reservation[]
+  internalBookings InternalBooking[]
 }
 
 model Reservation {
@@ -38,10 +39,54 @@ model Reservation {
   phone         String
   email         String
   preferredDate String
+  // 表示用の時間ラベル（"10:00〜11:00"）。startTime/endTime から生成する。
   preferredTime String
+  // 実際の予約枠。重複チェック・カレンダー登録はこの2項目を基準に行う。
+  startTime     String   @default("")
+  endTime       String   @default("")
   notes         String   @default("")
   status        String   @default("未承認")
+  // LINE WORKSカレンダーへ登録した予定のID（重複登録の防止・追跡用）
+  calendarEventId String @default("")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  @@index([propertyId, preferredDate])
 }
 
+/// 社内スタッフによる案内予約。仲介会社には一切公開しない。
+model InternalBooking {
+  id           String   @id @default(cuid())
+  propertyId   String
+  property     Property @relation(fields: [propertyId], references: [id])
+  propertyName String
+  staffName    String
+  date         String
+  startTime    String
+  endTime      String
+  notes        String   @default("")
+  createdBy    String   @default("")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([propertyId, date])
+}
+
+/// 担当営業マスタ。承認メールの担当者電話番号・名刺添付に使用する。
+model Staff {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  /// 会社代表番号（未入力なら既定の代表番号を使用）
+  companyPhone String   @default("")
+  /// 担当者携帯番号（または担当直通）
+  mobilePhone  String   @default("")
+  /// 名刺ファイル（メール添付用）
+  cardFileName String   @default("")
+  cardMimeType String   @default("")
+  /// 名刺ファイルの中身（Base64）。1MB程度までを想定。
+  cardData     String   @default("")
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

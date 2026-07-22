@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import CalendarTab from './CalendarTab';
-import StaffTab from './StaffTab';
 import { COMPANY_NAME, COMPANY_PHONE, CANCEL_NOTICE_TITLE } from '../../utils/company';
+import { cardKindLabel } from '../../utils/businessCard';
 
 interface Property {
   id: string;
@@ -31,8 +31,14 @@ interface Reservation {
   propertyName: string;
   companyName: string;
   agentName: string;
+  /** 仲介会社の代表電話番号 */
   phone: string;
+  /** 仲介会社ご担当者の携帯番号 */
+  mobilePhone: string;
   email: string;
+  cardFileName: string;
+  cardMimeType: string;
+  hasCard: boolean;
   preferredDate: string;
   preferredTime: string;
   startTime: string;
@@ -51,7 +57,7 @@ export default function AdminPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'properties' | 'reservations' | 'calendar' | 'staff'>('properties');
+  const [activeTab, setActiveTab] = useState<'properties' | 'reservations' | 'calendar'>('properties');
   
   // モーダル・編集状態
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
@@ -326,16 +332,6 @@ export default function AdminPage() {
           >
             🗓️ 内見カレンダー（社内）
           </button>
-          <button
-            onClick={() => setActiveTab('staff')}
-            className={`px-5 py-4 text-sm font-bold border-b-2 transition-all duration-200 ${
-              activeTab === 'staff'
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-400 hover:text-slate-650'
-            }`}
-          >
-            👤 担当者マスタ
-          </button>
         </div>
 
         {/* 1. 物件管理タブ */}
@@ -545,7 +541,39 @@ export default function AdminPage() {
                           <td className="px-6 py-4">
                             <div className="font-bold text-slate-800">{res.companyName}</div>
                             <div className="text-slate-600 text-xs mt-0.5">{res.agentName} 様</div>
-                            <div className="text-slate-500 text-xs font-mono">{res.phone} | {res.email}</div>
+                            {/* 会社代表番号・担当者携帯番号・名刺（申込時に取得） */}
+                            <div className="mt-1.5 space-y-0.5 text-xs">
+                              <div className="text-slate-600">
+                                <span className="text-slate-400">会社</span>{' '}
+                                <span className="font-mono font-semibold">{res.phone || '（未入力）'}</span>
+                              </div>
+                              <div className="text-slate-600">
+                                <span className="text-slate-400">担当</span>{' '}
+                                {res.mobilePhone ? (
+                                  <span className="font-mono font-semibold">{res.mobilePhone}</span>
+                                ) : (
+                                  <span className="text-amber-600 font-bold">（未入力）</span>
+                                )}
+                              </div>
+                              <div className="text-slate-500 font-mono">{res.email}</div>
+                            </div>
+                            <div className="mt-2">
+                              {res.hasCard ? (
+                                <a
+                                  href={`/api/reservations/${res.id}/card`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title={res.cardFileName}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold transition-colors"
+                                >
+                                  💳 名刺を見る（{cardKindLabel(res.cardMimeType)}）
+                                </a>
+                              ) : (
+                                <span className="inline-block px-2.5 py-1 rounded bg-slate-100 text-slate-500 text-[11px]">
+                                  名刺なし
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-slate-800 font-bold">{res.preferredDate}</div>
@@ -606,9 +634,6 @@ export default function AdminPage() {
         {activeTab === 'calendar' && (
           <CalendarTab properties={properties.map(p => ({ id: p.id, name: p.name }))} />
         )}
-
-        {/* 4. 担当者マスタタブ */}
-        {activeTab === 'staff' && <StaffTab />}
 
       </div>
 

@@ -96,7 +96,10 @@ export interface CalendarEventInput {
   endTime: string;
   companyName: string;
   agentName: string;
+  /** 会社代表電話番号 */
   phone: string;
+  /** 担当者携帯番号 */
+  mobilePhone?: string;
   notes: string;
   /** 件名の先頭に付ける区分（例: 内見 / 社内案内） */
   category?: string;
@@ -124,7 +127,8 @@ export async function createCalendarEvent(input: CalendarEventInput): Promise<st
     `日時　　　：${input.date} ${input.startTime}〜${input.endTime}`,
     `仲介会社名：${input.companyName || '（なし）'}`,
     `担当者名　：${input.agentName || '（なし）'}`,
-    `電話番号　：${input.phone || '（未入力）'}`,
+    `会社電話　：${input.phone || '（未入力）'}`,
+    ...(input.mobilePhone ? [`担当者携帯：${input.mobilePhone}`] : []),
     `備考　　　：${input.notes || '（なし）'}`,
   ].join('\n');
 

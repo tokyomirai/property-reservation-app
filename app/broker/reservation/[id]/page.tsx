@@ -14,20 +14,20 @@ interface Property {
   setupLocation: string | null;
 }
 
-interface Contact {
-  companyPhone: string;
-  repName: string;
-  repPhone: string;
-}
-
 interface Reservation {
   id: string;
   propertyId: string;
   propertyName: string;
   companyName: string;
   agentName: string;
+  /** 仲介会社の代表電話番号 */
   phone: string;
+  /** 仲介会社ご担当者の携帯番号 */
+  mobilePhone: string;
   email: string;
+  cardFileName: string;
+  cardMimeType: string;
+  hasCard: boolean;
   preferredDate: string;
   preferredTime: string;
   startTime: string;
@@ -36,7 +36,6 @@ interface Reservation {
   status: string;
   createdAt: string;
   keyDisclosure?: '開示中' | '未承認' | '期間前' | '期間終了' | '日付不明';
-  contact?: Contact;
 }
 
 interface PageProps {
@@ -111,9 +110,6 @@ export default function ReservationStatusPage({ params }: PageProps) {
       ? `${reservation.startTime}〜${reservation.endTime}`
       : reservation.preferredTime;
 
-  const companyPhone = reservation.contact?.companyPhone || COMPANY_PHONE;
-  const repPhone = reservation.contact?.repPhone ?? '';
-  const repName = reservation.contact?.repName ?? '';
 
   return (
     <div className="flex-1 bg-slate-50 text-slate-800 p-4 sm:p-6 lg:p-8">
@@ -175,44 +171,13 @@ export default function ReservationStatusPage({ params }: PageProps) {
               お手数ですが、<strong className="font-extrabold">{COMPANY_NAME}</strong>までお電話にてご連絡ください。
             </p>
             <a
-              href={`tel:${companyPhone.replace(/-/g, '')}`}
+              href={`tel:${COMPANY_PHONE.replace(/-/g, '')}`}
               className="inline-flex items-center gap-2 mt-1 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm shadow-sm transition-colors"
             >
-              <span>TEL：{companyPhone}</span>
+              <span>TEL：{COMPANY_PHONE}</span>
             </a>
           </div>
         )}
-
-        {/* ⑥ 会社代表番号・担当者携帯番号の両方を表示 */}
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-md space-y-4">
-          <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-2.5 flex items-center gap-1.5">
-            <span>☎️</span> お問い合わせ先
-          </h2>
-          <table className="w-full text-left text-xs sm:text-sm">
-            <tbody className="divide-y divide-slate-100">
-              <tr>
-                <td className="py-2.5 text-slate-400 font-medium w-28">会社</td>
-                <td className="py-2.5">
-                  <a href={`tel:${companyPhone.replace(/-/g, '')}`} className="text-slate-850 font-bold font-mono hover:text-indigo-600">
-                    {companyPhone}
-                  </a>
-                </td>
-              </tr>
-              {repPhone && (
-                <tr>
-                  <td className="py-2.5 text-slate-400 font-medium">
-                    担当{repName && <span className="block text-[11px] text-slate-500 mt-0.5">{repName}</span>}
-                  </td>
-                  <td className="py-2.5">
-                    <a href={`tel:${repPhone.replace(/-/g, '')}`} className="text-slate-850 font-bold font-mono hover:text-indigo-600">
-                      {repPhone}
-                    </a>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
 
         {/* Key Information Opening Control (CRITICAL REQUIREMENT) */}
         <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-md space-y-4">
@@ -325,12 +290,26 @@ export default function ReservationStatusPage({ params }: PageProps) {
                 <td className="py-2.5 text-slate-700 font-medium">{reservation.agentName} 様</td>
               </tr>
               <tr>
-                <td className="py-2.5 text-slate-400 font-medium">連絡先電話番号</td>
-                <td className="py-2.5 text-slate-600 font-mono">{reservation.phone}</td>
+                <td className="py-2.5 text-slate-400 font-medium">会社電話番号</td>
+                <td className="py-2.5 text-slate-600 font-mono">{reservation.phone || '未入力'}</td>
+              </tr>
+              <tr>
+                <td className="py-2.5 text-slate-400 font-medium">担当者携帯番号</td>
+                <td className="py-2.5 text-slate-600 font-mono">{reservation.mobilePhone || '未入力'}</td>
               </tr>
               <tr>
                 <td className="py-2.5 text-slate-400 font-medium">メールアドレス</td>
                 <td className="py-2.5 text-slate-600 font-mono">{reservation.email}</td>
+              </tr>
+              <tr>
+                <td className="py-2.5 text-slate-400 font-medium">名刺</td>
+                <td className="py-2.5 text-slate-600">
+                  {reservation.hasCard ? (
+                    <span className="text-emerald-700 font-semibold">📎 {reservation.cardFileName}</span>
+                  ) : (
+                    'アップロードなし'
+                  )}
+                </td>
               </tr>
               <tr>
                 <td className="py-2.5 text-slate-400 font-medium">希望日時</td>

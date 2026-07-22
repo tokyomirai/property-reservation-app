@@ -1,6 +1,6 @@
 // utils/mail.ts
 import { Resend } from 'resend';
-import { type Reservation, type Staff } from '@prisma/client';
+import { type Reservation } from '@prisma/client';
 import {
   COMPANY_NAME,
   COMPANY_PHONE,
@@ -80,8 +80,10 @@ export async function sendReservationEmail(
     `■ 物件名        : ${reservation.propertyName}`,
     `■ 仲介業者名    : ${reservation.companyName}`,
     `■ ご担当者名    : ${reservation.agentName} 様`,
-    `■ 電話番号      : ${reservation.phone || '（未入力）'}`,
+    `■ 会社電話番号  : ${reservation.phone || '（未入力）'}`,
+    `■ 担当者携帯番号: ${reservation.mobilePhone || '（未入力）'}`,
     `■ メールアドレス: ${reservation.email}`,
+    `■ 名刺          : ${reservation.cardFileName ? `${reservation.cardFileName}（管理画面から確認できます）` : '（添付なし）'}`,
     `■ 内見希望日    : ${reservation.preferredDate || '（未入力）'}`,
     `■ 内見希望時間  : ${timeLabel(reservation)}`,
     `■ その他連絡事項: ${reservation.notes || '（なし）'}`,
@@ -124,24 +126,15 @@ type KeyInfo = {
   setupLocation: string;
 } | null | undefined;
 
-/** 承認メールに載せる担当者の連絡先。担当者マスタが未登録なら会社代表番号のみ表示する。 */
-function contactLines(staff: Staff | null | undefined): { company: string; rep: string; repName: string } {
-  const company = (staff?.companyPhone ?? '').trim() || COMPANY_PHONE;
-  const rep = (staff?.mobilePhone ?? '').trim();
-  return { company, rep, repName: (staff?.name ?? '').trim() };
-}
-
 /**
  * 承認メールの件名・本文（テキスト／HTML）を組み立てる。
  * 送信処理から切り離すことで、送信せずに内容を確認できるようにしている。
  * @param reservation 承認された予約
  * @param property 物件の鍵情報（キーボックス番号・解除番号・設置場所）
- * @param staff 物件の担当営業（電話番号の表示に使用。未登録なら null）
  */
 export function buildApprovalEmail(
   reservation: Reservation,
-  property: KeyInfo,
-  staff?: Staff | null
+  property: KeyInfo
 ): { subject: string; text: string; html: string } {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || '';
@@ -151,7 +144,6 @@ export function buildApprovalEmail(
 
   const subject = '【内見確定】内見のご案内と鍵情報のお知らせ（東京みらい不動産）';
   const when = `${reservation.preferredDate} ${timeLabel(reservation)}`;
-  const contact = contactLines(staff);
 
   // セキュリティ保護のため、鍵情報（解除番号等）はメール本文には記載しない。
   // メールは永久に受信箱へ残り、転送も容易なため、鍵情報は期間限定のWeb画面でのみ開示する。
@@ -171,10 +163,8 @@ export function buildApprovalEmail(
       ].join('\n')
     : '本物件はキーボックスを使用しない鍵受け渡しとなります。担当者より別途ご案内いたします。';
 
-  const contactTextLines = [
-    `会社：${contact.company}`,
-    ...(contact.rep ? [`担当：${contact.rep}${contact.repName ? `（${contact.repName}）` : ''}`] : []),
-  ];
+  // 弊社の連絡先（変更・キャンセルの受付窓口）
+  const contactTextLines = [`会社：${COMPANY_PHONE}`];
 
   const text = [
     '╔══════════════════════════════════╗',
@@ -199,7 +189,7 @@ export function buildApprovalEmail(
     `【日時】 ${when}`,
     `【予約詳細照会URL】 ${detailUrl}`,
     '',
-    '■ 担当者連絡先',
+    '■ お問い合わせ先',
     ...contactTextLines,
     '',
     '■ 鍵の受け渡しについて',
@@ -233,18 +223,9 @@ export function buildApprovalEmail(
        </div>`
     : `<p style="margin:0;">本物件はキーボックスを使用しない鍵受け渡しとなります。担当者より別途ご案内いたします。</p>`;
 
-  const contactRowsHtml = [
+  const contactRowsHtml =
     `<tr><td style="padding:4px 12px 4px 0;color:#64748b;white-space:nowrap;">会社</td>
-         <td style="padding:4px 0;font-weight:bold;color:#0f172a;">${esc(contact.company)}</td></tr>`,
-    ...(contact.rep
-      ? [
-          `<tr><td style="padding:4px 12px 4px 0;color:#64748b;white-space:nowrap;">担当${
-            contact.repName ? `（${esc(contact.repName)}）` : ''
-          }</td>
-             <td style="padding:4px 0;font-weight:bold;color:#0f172a;">${esc(contact.rep)}</td></tr>`,
-        ]
-      : []),
-  ].join('');
+         <td style="padding:4px 0;font-weight:bold;color:#0f172a;">${esc(COMPANY_PHONE)}</td></tr>`;
 
   // ① 変更・キャンセルの案内は、開封して最初に目に入るよう本文最上部に枠付きで配置する
   const html = `<div style="font-family:'Hiragino Sans','Yu Gothic',sans-serif;color:#1e293b;font-size:14px;line-height:1.8;max-width:640px;">
@@ -280,7 +261,7 @@ export function buildApprovalEmail(
         <td style="padding:4px 0;"><a href="${esc(detailUrl)}" style="color:#4f46e5;">${esc(detailUrl)}</a></td></tr>
   </table>
 
-  <h3 style="font-size:14px;margin:24px 0 8px;padding-bottom:6px;border-bottom:2px solid #e2e8f0;">■ 担当者連絡先</h3>
+  <h3 style="font-size:14px;margin:24px 0 8px;padding-bottom:6px;border-bottom:2px solid #e2e8f0;">■ お問い合わせ先</h3>
   <table style="border-collapse:collapse;font-size:14px;">${contactRowsHtml}</table>
 
   <h3 style="font-size:14px;margin:24px 0 8px;padding-bottom:6px;border-bottom:2px solid #e2e8f0;">■ 鍵の受け渡しについて</h3>
@@ -311,13 +292,8 @@ export function buildApprovalEmail(
  * 内見確定・鍵情報のメールを送信する。
  * @param reservation 承認された予約
  * @param property 物件の鍵情報（キーボックス番号・解除番号・設置場所）
- * @param staff 物件の担当営業（電話番号・名刺添付に使用。未登録なら null）
  */
-export async function sendApprovalEmail(
-  reservation: Reservation,
-  property: KeyInfo,
-  staff?: Staff | null
-) {
+export async function sendApprovalEmail(reservation: Reservation, property: KeyInfo) {
   const apiKey = process.env.RESEND_API_KEY;
 
   const to = (reservation.email ?? '').trim();
@@ -326,20 +302,13 @@ export async function sendApprovalEmail(
     return;
   }
 
-  const { subject, text, html } = buildApprovalEmail(reservation, property, staff);
-
-  // ⑦ 担当者ごとの名刺データを添付する（担当者マスタに登録がある場合のみ）
-  const attachments =
-    staff?.cardData && staff.cardFileName
-      ? [{ filename: staff.cardFileName, content: staff.cardData }]
-      : undefined;
+  const { subject, text, html } = buildApprovalEmail(reservation, property);
 
   if (!apiKey) {
     console.warn('⚠️ RESEND_API_KEY 未設定のため承認メールをスキップ（モック出力）:', {
       to,
       subject,
       reservationId: reservation.id,
-      attachments: attachments?.map((a) => a.filename) ?? [],
     });
     return;
   }
@@ -354,17 +323,13 @@ export async function sendApprovalEmail(
       subject,
       text,
       html,
-      ...(attachments ? { attachments } : {}),
     });
 
     if (error) {
       console.error('❌ 承認メール送信エラー(Resend):', error);
       return;
     }
-    console.log(
-      `✅ 承認メール送信成功 (id: ${data?.id}) → ${to}` +
-        (attachments ? ` / 名刺添付: ${attachments[0].filename}` : '')
-    );
+    console.log(`✅ 承認メール送信成功 (id: ${data?.id}) → ${to}`);
   } catch (err) {
     // メール送信失敗が承認処理自体を止めないよう握りつぶす
     console.error('❌ 承認メール送信で例外:', err);

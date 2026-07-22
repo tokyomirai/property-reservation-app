@@ -17,7 +17,10 @@ export interface CalendarEntry {
   companyName: string;
   /** 内見予約は仲介担当者、社内案内予約は社内スタッフ名 */
   personName: string;
+  /** 会社代表電話番号（社内案内予約では空） */
   phone: string;
+  /** 担当者携帯番号（社内案内予約では空） */
+  mobilePhone: string;
   notes: string;
   status: string;
   createdAt: string;
@@ -58,6 +61,7 @@ export async function GET(request: NextRequest) {
       companyName: r.companyName,
       personName: r.agentName,
       phone: r.phone,
+      mobilePhone: r.mobilePhone,
       notes: r.notes,
       status: r.status,
       createdAt: r.createdAt.toISOString(),
@@ -73,6 +77,7 @@ export async function GET(request: NextRequest) {
       companyName: '社内案内',
       personName: b.staffName,
       phone: '',
+      mobilePhone: '',
       notes: b.notes,
       status: '確定',
       createdAt: b.createdAt.toISOString(),

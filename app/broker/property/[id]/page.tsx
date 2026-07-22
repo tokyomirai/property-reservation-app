@@ -3,6 +3,11 @@
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import {
+  ALLOWED_CARD_TYPES,
+  ALLOWED_CARD_LABEL,
+  MAX_CARD_BYTES,
+} from '../../../../utils/businessCard';
 
 interface Property {
   id: string;
@@ -33,11 +38,15 @@ export default function PropertyDetailPage({ params }: PageProps) {
   const [formData, setFormData] = useState({
     companyName: '',
     agentName: '',
-    phone: '',
+    phone: '',       // 会社電話番号
+    mobilePhone: '', // 担当者携帯番号
     email: '',
     preferredDate: '',
     startTime: '',
     endTime: '',
+    cardFileName: '',
+    cardMimeType: '',
+    cardData: '',
     notes: '',
     website: '', // ハニーポット（ボット対策・人間は入力しない）
   });
@@ -61,6 +70,45 @@ export default function PropertyDetailPage({ params }: PageProps) {
         setLoading(false);
       });
   }, [id]);
+
+  // 名刺（JPG / PNG / PDF）を読み込んでBase64で保持する
+  const handleCardChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!(ALLOWED_CARD_TYPES as readonly string[]).includes(file.type)) {
+      setFormError(`名刺は ${ALLOWED_CARD_LABEL} のいずれかの形式でアップロードしてください。`);
+      e.target.value = '';
+      return;
+    }
+    if (file.size > MAX_CARD_BYTES) {
+      setFormError('名刺ファイルのサイズが大きすぎます（5MBまで）。');
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = String(reader.result ?? '');
+          resolve(result.slice(result.indexOf(',') + 1));
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      setFormData((prev) => ({
+        ...prev,
+        cardFileName: file.name,
+        cardMimeType: file.type,
+        cardData: base64,
+      }));
+      setFormError('');
+    } catch (err) {
+      console.error(err);
+      setFormError('名刺ファイルの読み込みに失敗しました。');
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,10 +137,14 @@ export default function PropertyDetailPage({ params }: PageProps) {
         companyName: formData.companyName,
         agentName: formData.agentName,
         phone: formData.phone,
+        mobilePhone: formData.mobilePhone,
         email: formData.email,
         preferredDate: formData.preferredDate,
         startTime: formData.startTime,
         endTime: formData.endTime,
+        cardFileName: formData.cardFileName,
+        cardMimeType: formData.cardMimeType,
+        cardData: formData.cardData,
         notes: formData.notes,
         website: formData.website,
       }),
@@ -226,7 +278,7 @@ export default function PropertyDetailPage({ params }: PageProps) {
 
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">電話番号 <span className="text-rose-500">*</span></label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">会社電話番号 <span className="text-rose-500">*</span></label>
                   <input
                     type="tel"
                     required
@@ -237,16 +289,57 @@ export default function PropertyDetailPage({ params }: PageProps) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">メールアドレス <span className="text-rose-500">*</span></label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">担当者携帯番号 <span className="text-rose-500">*</span></label>
                   <input
-                    type="email"
+                    type="tel"
                     required
-                    placeholder="例: agent@mirai-re.jp"
+                    placeholder="例: 090-1234-5678"
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-855 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
-                    value={formData.email}
-                    onChange={e => setFormData({...formData, email: e.target.value})}
+                    value={formData.mobilePhone}
+                    onChange={e => setFormData({...formData, mobilePhone: e.target.value})}
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">メールアドレス <span className="text-rose-500">*</span></label>
+                <input
+                  type="email"
+                  required
+                  placeholder="例: agent@mirai-re.jp"
+                  className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-855 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                  value={formData.email}
+                  onChange={e => setFormData({...formData, email: e.target.value})}
+                />
+              </div>
+
+              {/* 名刺のアップロード（JPG / PNG / PDF） */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">名刺（画像・PDF）</label>
+                {formData.cardFileName ? (
+                  <div className="flex items-center justify-between gap-3 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5">
+                    <span className="text-xs text-emerald-800 font-bold truncate">
+                      📎 {formData.cardFileName}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, cardFileName: '', cardMimeType: '', cardData: '' })}
+                      className="shrink-0 px-2.5 py-1 rounded bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 text-[11px] font-bold"
+                    >
+                      取り消す
+                    </button>
+                  </div>
+                ) : (
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,application/pdf"
+                    onChange={handleCardChange}
+                    className="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-slate-250 file:bg-slate-100 file:text-slate-700 file:text-xs file:font-bold hover:file:bg-slate-200 file:cursor-pointer"
+                  />
+                )}
+                <p className="text-[11px] text-slate-500 mt-1">
+                  {ALLOWED_CARD_LABEL} 形式・5MBまで。ご担当者様の名刺をアップロードしてください。
+                </p>
               </div>
 
               {/* 内見希望日 ＋ 開始/終了時間 */}

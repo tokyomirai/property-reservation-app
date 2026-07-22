@@ -3,7 +3,6 @@ import { getSession, unauthorized } from '../../../../utils/session';
 import { sendApprovalEmail } from '../../../../utils/mail';
 import { createCalendarEvent } from '../../../../utils/lineworks';
 import { findConflicts, conflictMessage } from '../../../../utils/schedule';
-import { COMPANY_PHONE } from '../../../../utils/company';
 import { type NextRequest } from 'next/server';
 
 // 鍵情報の開示ステータス
@@ -71,18 +70,6 @@ export async function GET(
   const keyDisclosure = getKeyDisclosure(reservation.status, reservation.preferredDate);
   const canSeeKey = session ? true : keyDisclosure === '開示中';
 
-  // ⑥ 予約詳細画面に会社代表番号・担当者携帯番号を表示するため担当者情報を付与する。
-  //    メールアドレスは公開しない（電話番号と氏名のみ）。
-  const salesRepEmail = (reservation.property?.salesRepEmail ?? '').trim();
-  const staff = salesRepEmail
-    ? await prisma.staff.findUnique({ where: { email: salesRepEmail } })
-    : null;
-  const contact = {
-    companyPhone: (staff?.companyPhone ?? '').trim() || COMPANY_PHONE,
-    repName: staff?.name ?? '',
-    repPhone: staff?.mobilePhone ?? '',
-  };
-
   const safeProperty = reservation.property
     ? {
         ...reservation.property,
@@ -94,11 +81,14 @@ export async function GET(
       }
     : null;
 
+  // 名刺の実データはレスポンスに含めない（社内ログイン時のみ /card から取得できる）
+  const { cardData, ...rest } = reservation;
+
   return Response.json({
-    ...reservation,
+    ...rest,
+    hasCard: cardData !== '',
     property: safeProperty,
     keyDisclosure,
-    contact,
   });
 }
 
@@ -158,14 +148,8 @@ export async function PATCH(
     });
 
     if (body.status === '承認済') {
-      // ⑥⑦ 承認メールに載せる担当者の電話番号・名刺データを担当者マスタから取得
-      const salesRepEmail = (reservation.property?.salesRepEmail ?? '').trim();
-      const staff = salesRepEmail
-        ? await prisma.staff.findUnique({ where: { email: salesRepEmail } })
-        : null;
-
       // 申込者へ内見確定・鍵情報メールを送信（送信失敗は承認処理自体を止めない）
-      await sendApprovalEmail(reservation, reservation.property, staff);
+      await sendApprovalEmail(reservation, reservation.property);
 
       // ② 確定した内見予約をLINE WORKSカレンダーへ登録（重複登録は行わない）
       if (!reservation.calendarEventId) {
@@ -178,6 +162,7 @@ export async function PATCH(
           companyName: reservation.companyName,
           agentName: reservation.agentName,
           phone: reservation.phone,
+          mobilePhone: reservation.mobilePhone,
           notes: reservation.notes,
         });
         if (eventId !== null) {

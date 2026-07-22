@@ -3,6 +3,7 @@ import { getSession, unauthorized } from '../../../utils/session';
 import { sendReservationEmail } from '../../../utils/mail';
 import { rateLimit, getClientIp } from '../../../utils/rateLimit';
 import { validateSlot, findConflicts, conflictMessage, formatTimeRange } from '../../../utils/schedule';
+import { validateCard } from '../../../utils/businessCard';
 import { type NextRequest } from 'next/server';
 
 // GET: 予約一覧（管理者のみ）
@@ -14,7 +15,11 @@ export async function GET(request: NextRequest) {
     orderBy: { createdAt: 'desc' },
     include: { property: { select: { name: true } } },
   });
-  return Response.json(reservations);
+  // 名刺の実データは一覧では返さず、添付の有無のみを返す（レスポンス肥大の防止）。
+  // 実データは /api/reservations/[id]/card から取得する。
+  return Response.json(
+    reservations.map(({ cardData, ...rest }) => ({ ...rest, hasCard: cardData !== '' }))
+  );
 }
 
 // --- 公開エンドポイントの濫用対策 ---
@@ -22,15 +27,18 @@ const IP_LIMIT = 5;                        // 同一IPから
 const IP_WINDOW_MS = 10 * 60 * 1000;       // 10分間に5件まで
 const GLOBAL_HOURLY_LIMIT = 30;            // 全体で1時間に30件まで（メール送信枠の保護）
 
-// 各項目の最大文字数
+// 各項目の最大文字数（名刺データは businessCard.ts 側で個別に検証する）
 const MAX_LEN: Record<string, number> = {
   companyName: 100,
   agentName: 50,
   phone: 30,
+  mobilePhone: 30,
   email: 254,
   preferredDate: 20,
   startTime: 5,
   endTime: 5,
+  cardFileName: 255,
+  cardMimeType: 100,
   notes: 1000,
 };
 
@@ -59,16 +67,35 @@ export async function POST(request: NextRequest) {
   const fields = {
     companyName: toStr(body.companyName),
     agentName: toStr(body.agentName),
+    // 会社代表電話番号
     phone: toStr(body.phone),
+    // ご担当者の携帯番号（必須）
+    mobilePhone: toStr(body.mobilePhone),
     email: toStr(body.email),
     preferredDate: toStr(body.preferredDate),
     startTime: toStr(body.startTime),
     endTime: toStr(body.endTime),
+    cardFileName: toStr(body.cardFileName),
+    cardMimeType: toStr(body.cardMimeType),
+    cardData: toStr(body.cardData),
     notes: toStr(body.notes),
   };
 
   if (!body.propertyId || !fields.companyName || !fields.agentName || !fields.email) {
     return Response.json({ error: 'Required fields missing' }, { status: 400 });
+  }
+
+  if (!fields.phone) {
+    return Response.json({ error: '会社電話番号を入力してください。' }, { status: 400 });
+  }
+  if (!fields.mobilePhone) {
+    return Response.json({ error: '担当者携帯番号を入力してください。' }, { status: 400 });
+  }
+
+  // 名刺（JPG / PNG / PDF）の形式・サイズ検証
+  const cardError = validateCard(fields);
+  if (cardError) {
+    return Response.json({ error: cardError }, { status: 400 });
   }
 
   // ④ 内見希望は開始時間・終了時間の2項目で受け付ける
@@ -131,7 +158,11 @@ export async function POST(request: NextRequest) {
       companyName: fields.companyName,
       agentName: fields.agentName,
       phone: fields.phone,
+      mobilePhone: fields.mobilePhone,
       email: fields.email,
+      cardFileName: fields.cardFileName,
+      cardMimeType: fields.cardMimeType,
+      cardData: fields.cardData,
       preferredDate: fields.preferredDate,
       preferredTime: formatTimeRange(fields.startTime, fields.endTime),
       startTime: fields.startTime,

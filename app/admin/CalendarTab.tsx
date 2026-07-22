@@ -21,6 +21,7 @@ interface CalendarEntry {
   companyName: string;
   personName: string;
   phone: string;
+  mobilePhone: string;
   notes: string;
   status: string;
 }
@@ -239,7 +240,8 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
                         <div className="font-bold text-slate-800 text-sm truncate">{entry.propertyName}</div>
                         <div className="text-xs text-slate-600 mt-0.5 truncate">
                           {isInternal ? `担当：${entry.personName}` : `${entry.companyName} / ${entry.personName} 様`}
-                          {entry.phone && <span className="text-slate-500 font-mono ml-2">{entry.phone}</span>}
+                          {entry.phone && <span className="text-slate-500 font-mono ml-2">会社 {entry.phone}</span>}
+                          {entry.mobilePhone && <span className="text-slate-500 font-mono ml-2">担当 {entry.mobilePhone}</span>}
                         </div>
                         {entry.notes && (
                           <div className="text-[11px] text-slate-500 mt-1 truncate">📝 {entry.notes}</div>

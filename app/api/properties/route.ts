@@ -1,5 +1,6 @@
 import { prisma } from '../../../utils/db';
 import { getSession, unauthorized } from '../../../utils/session';
+import { validatePropertyLinks } from '../../../utils/propertyLinks';
 import { type NextRequest } from 'next/server';
 
 // 公開側に返すフィールド（鍵情報・社内メモは除外）
@@ -11,9 +12,13 @@ const PUBLIC_SELECT = {
   viewingStatus: true,
   isPublished: true,
   notes: true,
+  // 公開カードの資料/動画/パノラマ導線（公開用URL）
+  documentUrl: true,
+  youtubeUrl: true,
+  panoramaUrl: true,
   createdAt: true,
   updatedAt: true,
-  // 除外: unlockCode, keyBoxNumber, setupLocation, hasKeyBox, hasSlippers, hasSignboard, internalMemo, lastUpdatedBy
+  // 除外: unlockCode, keyBoxNumber, setupLocation, hasKeyBox, hasSlippers, hasSignboard, internalMemo, salesRepEmail, lastUpdatedBy
 };
 
 // GET: 物件一覧取得
@@ -49,6 +54,17 @@ export async function POST(request: NextRequest) {
   if (!session) return unauthorized();
 
   const body = await request.json();
+
+  // 公開導線URL（詳細資料/動画/360°）の形式検証。空欄は許容。
+  const linkError = validatePropertyLinks({
+    documentUrl: body.documentUrl ?? '',
+    youtubeUrl: body.youtubeUrl ?? '',
+    panoramaUrl: body.panoramaUrl ?? '',
+  });
+  if (linkError) {
+    return Response.json({ error: linkError }, { status: 400 });
+  }
+
   const property = await prisma.property.create({
     data: {
       name: body.name,
@@ -65,6 +81,9 @@ export async function POST(request: NextRequest) {
       notes: body.notes ?? '',
       internalMemo: body.internalMemo ?? '',
       salesRepEmail: body.salesRepEmail ?? '',
+      documentUrl: body.documentUrl ?? '',
+      youtubeUrl: body.youtubeUrl ?? '',
+      panoramaUrl: body.panoramaUrl ?? '',
       lastUpdatedBy: session.name,
     },
   });

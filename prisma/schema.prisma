@@ -22,6 +22,10 @@ model Property {
   notes            String            @default("")
   internalMemo     String            @default("")
   salesRepEmail    String            @default("")
+  // 公開物件カードの資料/動画/パノラマ導線（いずれも公開用URL。未登録なら空文字）
+  documentUrl      String            @default("")
+  youtubeUrl       String            @default("")
+  panoramaUrl      String            @default("")
   lastUpdatedBy    String            @default("")
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt

@@ -1,5 +1,6 @@
 import { prisma } from '../../../../utils/db';
 import { getSession, unauthorized } from '../../../../utils/session';
+import { validatePropertyLinks } from '../../../../utils/propertyLinks';
 import { type NextRequest } from 'next/server';
 
 // GET: 物件詳細取得（公開・管理者両用）
@@ -45,6 +46,16 @@ export async function PUT(
   const { id } = await params;
   const body = await request.json();
 
+  // 公開導線URL（詳細資料/動画/360°）の形式検証。空欄は許容。
+  const linkError = validatePropertyLinks({
+    documentUrl: body.documentUrl ?? '',
+    youtubeUrl: body.youtubeUrl ?? '',
+    panoramaUrl: body.panoramaUrl ?? '',
+  });
+  if (linkError) {
+    return Response.json({ error: linkError }, { status: 400 });
+  }
+
   try {
     const property = await prisma.property.update({
       where: { id },
@@ -63,6 +74,9 @@ export async function PUT(
         notes: body.notes,
         internalMemo: body.internalMemo,
         salesRepEmail: body.salesRepEmail,
+        documentUrl: body.documentUrl,
+        youtubeUrl: body.youtubeUrl,
+        panoramaUrl: body.panoramaUrl,
         lastUpdatedBy: session.name,
       },
     });

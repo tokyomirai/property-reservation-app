@@ -21,6 +21,9 @@ interface Property {
   notes: string;
   internalMemo: string;
   salesRepEmail: string;
+  documentUrl: string;
+  youtubeUrl: string;
+  panoramaUrl: string;
   lastUpdatedBy: string;
   updatedAt: string;
 }
@@ -79,7 +82,10 @@ export default function AdminPage() {
     hasSignboard: '',
     notes: '',
     internalMemo: '',
-    salesRepEmail: ''
+    salesRepEmail: '',
+    documentUrl: '',
+    youtubeUrl: '',
+    panoramaUrl: ''
   });
 
   const refreshData = async () => {
@@ -138,10 +144,11 @@ export default function AdminPage() {
         body: JSON.stringify(newProp)
       });
       if (!res.ok) {
-        throw new Error('Failed to create property');
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'Failed to create property');
       }
       await refreshData();
-      
+
       // フォーム初期化
       setNewProp({
         name: '',
@@ -157,12 +164,15 @@ export default function AdminPage() {
         hasSignboard: '',
         notes: '',
         internalMemo: '',
-        salesRepEmail: ''
+        salesRepEmail: '',
+        documentUrl: '',
+        youtubeUrl: '',
+        panoramaUrl: ''
       });
       setIsAddModalOpen(false);
     } catch (err) {
       console.error(err);
-      alert('物件の追加に失敗しました。');
+      alert(err instanceof Error ? err.message : '物件の追加に失敗しました。');
     }
   };
 
@@ -182,13 +192,14 @@ export default function AdminPage() {
         body: JSON.stringify(editingProperty)
       });
       if (!res.ok) {
-        throw new Error('Failed to update property');
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'Failed to update property');
       }
       await refreshData();
       setEditingProperty(null);
     } catch (err) {
       console.error(err);
-      alert('物件の更新に失敗しました。');
+      alert(err instanceof Error ? err.message : '物件の更新に失敗しました。');
     }
   };
 
@@ -832,6 +843,48 @@ export default function AdminPage() {
                     onChange={e => setNewProp({...newProp, salesRepEmail: e.target.value})}
                   />
                 </div>
+                <div className="border-t border-slate-200 pt-4 space-y-4">
+                  <h4 className="text-sm font-bold text-indigo-600">🔗 公開リンク（仲介会社カードに表示）</h4>
+
+                  {/* 詳細資料URL */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">詳細資料URL</label>
+                    <input
+                      type="url"
+                      placeholder="https://..."
+                      className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                      value={newProp.documentUrl}
+                      onChange={e => setNewProp({...newProp, documentUrl: e.target.value})}
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">詳細資料を閲覧できるURLを入力してください</p>
+                  </div>
+
+                  {/* ルームツアー動画URL */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">ルームツアー動画URL</label>
+                    <input
+                      type="url"
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                      value={newProp.youtubeUrl}
+                      onChange={e => setNewProp({...newProp, youtubeUrl: e.target.value})}
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">YouTube等の動画URLを入力してください</p>
+                  </div>
+
+                  {/* 360°カメラURL */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">360°カメラURL</label>
+                    <input
+                      type="url"
+                      placeholder="https://..."
+                      className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                      value={newProp.panoramaUrl}
+                      onChange={e => setNewProp({...newProp, panoramaUrl: e.target.value})}
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">パノラマ・360°画像を閲覧できるURLを入力してください</p>
+                  </div>
+                </div>
               </div>
 
               <div className="border-t border-slate-200 pt-4 flex gap-3">
@@ -1054,6 +1107,48 @@ export default function AdminPage() {
                     value={editingProperty.salesRepEmail}
                     onChange={e => setEditingProperty({...editingProperty, salesRepEmail: e.target.value})}
                   />
+                </div>
+                <div className="border-t border-slate-200 pt-4 space-y-4">
+                  <h4 className="text-sm font-bold text-indigo-600">🔗 公開リンク（仲介会社カードに表示）</h4>
+
+                  {/* 詳細資料URL */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">詳細資料URL</label>
+                    <input
+                      type="url"
+                      placeholder="https://..."
+                      className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                      value={editingProperty.documentUrl}
+                      onChange={e => setEditingProperty({...editingProperty, documentUrl: e.target.value})}
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">詳細資料を閲覧できるURLを入力してください</p>
+                  </div>
+
+                  {/* ルームツアー動画URL */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">ルームツアー動画URL</label>
+                    <input
+                      type="url"
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                      value={editingProperty.youtubeUrl}
+                      onChange={e => setEditingProperty({...editingProperty, youtubeUrl: e.target.value})}
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">YouTube等の動画URLを入力してください</p>
+                  </div>
+
+                  {/* 360°カメラURL */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">360°カメラURL</label>
+                    <input
+                      type="url"
+                      placeholder="https://..."
+                      className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                      value={editingProperty.panoramaUrl}
+                      onChange={e => setEditingProperty({...editingProperty, panoramaUrl: e.target.value})}
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">パノラマ・360°画像を閲覧できるURLを入力してください</p>
+                  </div>
                 </div>
               </div>
 

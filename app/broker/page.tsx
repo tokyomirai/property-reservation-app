@@ -14,6 +14,9 @@ interface Property {
   hasSlippers: string;
   hasSignboard: string;
   notes: string;
+  documentUrl?: string;
+  youtubeUrl?: string;
+  panoramaUrl?: string;
 }
 
 export default function BrokerPage() {
@@ -126,6 +129,12 @@ export default function BrokerPage() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredProperties.map((prop) => {
                 const isViewable = prop.viewingStatus === '内見可能' || prop.viewingStatus === 'リフォーム後の予約受付中';
+                // 資料/動画/360°の3枠。URLが登録されている項目のみクリック可能。
+                const actions = [
+                  { key: 'doc', label: '📄 詳細資料', href: prop.documentUrl || '' },
+                  { key: 'tour', label: '▶ ルームツアー動画', href: prop.youtubeUrl || '' },
+                  { key: 'pano', label: '360°カメラ', href: prop.panoramaUrl || '' },
+                ];
                 return (
                   <div 
                     key={prop.id}
@@ -185,6 +194,41 @@ export default function BrokerPage() {
                           現在内見不可 ({prop.viewingStatus})
                         </button>
                       )}
+
+                      {/* 詳細資料 / ルームツアー動画 / 360°カメラ
+                          常に3枠を均等幅・同一サイズで表示。未登録は「準備中」の無効表示。
+                          ・項目名は必ず1行（whitespace-nowrap）
+                          ・アイコン/項目名/準備中を縦横中央に配置（flex中央揃え）
+                          ・PCは3列、スマホは1列に折り返す */}
+                      <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {actions.map((a) =>
+                          a.href ? (
+                            <a
+                              key={a.key}
+                              href={a.href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={`${a.label}を開く`}
+                              className="flex flex-col items-center justify-center text-center h-14 px-1 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-250 text-[11px] font-bold shadow-sm transition-colors"
+                            >
+                              <span className="whitespace-nowrap leading-tight">{a.label}</span>
+                              {/* 準備中ボタンと高さを揃えるための不可視スペーサー */}
+                              <span aria-hidden="true" className="whitespace-nowrap text-[10px] font-semibold invisible leading-none">準備中</span>
+                            </a>
+                          ) : (
+                            <button
+                              key={a.key}
+                              type="button"
+                              disabled
+                              aria-disabled="true"
+                              className="flex flex-col items-center justify-center text-center h-14 px-1 rounded-lg bg-slate-50 text-slate-400 border border-slate-200 text-[11px] font-bold cursor-not-allowed select-none"
+                            >
+                              <span className="whitespace-nowrap leading-tight">{a.label}</span>
+                              <span className="whitespace-nowrap text-[10px] font-semibold leading-none mt-0.5">準備中</span>
+                            </button>
+                          )
+                        )}
+                      </div>
                     </div>
                   </div>
                 );

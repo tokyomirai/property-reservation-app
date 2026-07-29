@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import CalendarTab from './CalendarTab';
 import { COMPANY_NAME, COMPANY_PHONE, CANCEL_NOTICE_TITLE } from '../../utils/company';
 import { cardKindLabel } from '../../utils/businessCard';
@@ -61,7 +61,31 @@ export default function AdminPage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'properties' | 'reservations' | 'calendar'>('properties');
-  
+
+  // 固定領域（タイトル+タブ）を上部ヘッダー直下に貼り付けたうえで、一覧テーブルだけを内部スクロールさせる。
+  // テーブル領域の高さ =「ビューポート高 - テーブル領域の上端位置」で算出し、固定領域と重ならず画面内に収める。
+  // 固定領域の高さはレスポンシブで変わるため、テーブル領域の実際の上端を測って追従させる。
+  const stickyTopRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [scrollAreaTop, setScrollAreaTop] = useState(240);
+  useEffect(() => {
+    const update = () => {
+      const el = scrollAreaRef.current;
+      if (!el) return;
+      // ページ未スクロール時の上端位置（= 固定領域の下端）を求める
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      setScrollAreaTop(top);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    if (stickyTopRef.current) ro.observe(stickyTopRef.current);
+    window.addEventListener('resize', update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [loading, activeTab]);
+
   // モーダル・編集状態
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -280,7 +304,11 @@ export default function AdminPage() {
   return (
     <div className="flex-1 bg-slate-50 text-slate-805 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
-        
+
+        {/* 固定領域: 上部ヘッダー(h-16=64px)の直下に貼り付き、下の一覧だけがスクロールする。
+            背景を bg-slate-50（ページ背景と同色・不透明）にし、一覧が透けないようにする。 */}
+        <div ref={stickyTopRef} className="sticky top-16 z-40 bg-slate-50 space-y-6 pt-1 pb-3">
+
         {/* Title & Actions */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-5">
           <div>
@@ -345,27 +373,33 @@ export default function AdminPage() {
           </button>
         </div>
 
+        </div>{/* /固定領域 */}
+
         {/* 1. 物件管理タブ */}
         {activeTab === 'properties' && (
           <div className="bg-white border border-slate-200 rounded-b-xl overflow-hidden shadow-md">
-            <div className="overflow-x-auto">
+            {/* 一覧だけを内部スクロールさせる領域。高さは「ビューポート - 固定領域の下端」で算出し、
+                固定領域の直下からビューポート下端までに収める。横は overflow-x で従来どおりスクロール可能。 */}
+            <div ref={scrollAreaRef} className="overflow-auto" style={{ maxHeight: `calc(100vh - ${scrollAreaTop}px - 16px)` }}>
               <table className="min-w-full divide-y divide-slate-200 text-left">
-                <thead className="bg-slate-50 text-slate-505 text-xs font-bold uppercase tracking-wider">
+                {/* 表ヘッダーは内部スクロール領域の最上部(top:0)に貼り付く＝固定領域の直下で重ならない */}
+                <thead className="bg-slate-50 text-slate-505 text-xs font-bold uppercase tracking-wider sticky top-0 z-30 shadow-sm [&>tr>th]:bg-slate-50">
                   <tr>
-                    <th className="px-6 py-4">物件名 / 住所</th>
+                    {/* 物件名は一覧で最重要。最小幅を確保し、狭幅時は潰さず横スクロールへ回す。 */}
+                    <th className="px-6 py-4 min-w-[260px]">物件名 / 住所</th>
                     <th className="px-4 py-4">公開状況</th>
                     <th className="px-4 py-4">販売状況</th>
                     <th className="px-4 py-4">内見状況</th>
                     <th className="px-4 py-4">鍵管理</th>
                     <th className="px-4 py-4">スリッパ</th>
                     <th className="px-4 py-4">売り看板</th>
+                    <th className="px-4 py-4">公開資料</th>
                     <th className="px-6 py-4 text-right">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
                   {properties.map((prop) => {
-                    const alerts = getPropertyAlerts(prop);
-                    const hasAlert = alerts.length > 0;
+                    const hasAlert = getPropertyAlerts(prop).length > 0;
                     return (
                       <tr 
                         key={prop.id} 
@@ -373,28 +407,17 @@ export default function AdminPage() {
                           hasAlert ? 'bg-rose-500/[0.02] hover:bg-rose-500/[0.04]' : ''
                         }`}
                       >
-                        {/* 物件名 / 住所 */}
-                        <td className="px-6 py-4">
-                          <div className="font-bold text-slate-800">{prop.name}</div>
-                          <div className="text-slate-500 text-xs mt-0.5">📍 {prop.address}</div>
+                        {/* 物件名 / 住所（最小幅を確保して1文字ずつの折り返しを防ぐ） */}
+                        <td className="px-6 py-4 min-w-[260px] align-top">
+                          <div className="font-bold text-slate-800 break-words">{prop.name}</div>
+                          <div className="text-slate-500 text-xs mt-0.5 break-words">📍 {prop.address}</div>
                           {prop.internalMemo && (
                             <div className="text-[11px] text-slate-550 mt-1 bg-slate-50 px-2 py-1 rounded border border-slate-200 inline-block">
                               🔒 社内メモ: {prop.internalMemo}
                             </div>
                           )}
-                          {/* 未入力アラートリスト */}
-                          {hasAlert && (
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {alerts.map((al, idx) => (
-                                <span 
-                                  key={idx} 
-                                  className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-600 text-white animate-pulse shadow-sm"
-                                >
-                                  ⚠️ {al}
-                                </span>
-                              ))}
-                            </div>
-                          )}
+                          {/* 注意：物件名下の未入力アラートラベルは一覧では非表示。
+                              各列（鍵管理・スリッパ・売り看板）の状態表示で確認できるため重複を排除。 */}
                         </td>
 
                         {/* 公開状況 */}
@@ -438,7 +461,7 @@ export default function AdminPage() {
                         {/* 鍵管理 */}
                         <td className="px-4 py-4 whitespace-nowrap">
                           {!prop.hasKeyBox ? (
-                            <span className="px-2 py-1 rounded bg-rose-600 text-white text-[11px] font-bold animate-pulse shadow-sm">
+                            <span className="px-2 py-1 rounded bg-rose-600 text-white text-[11px] font-bold shadow-sm">
                               ⚠️ 未設定
                             </span>
                           ) : prop.hasKeyBox === 'あり' ? (
@@ -449,12 +472,12 @@ export default function AdminPage() {
                               {prop.unlockCode ? (
                                 <div className="text-slate-700 font-mono font-semibold">管理番号: {prop.keyBoxNumber} / 解除: {prop.unlockCode}</div>
                               ) : (
-                                <div className="text-rose-600 font-extrabold animate-pulse">❌ 解除番号未入力</div>
+                                <div className="text-rose-600 font-extrabold">❌ 解除番号未入力</div>
                               )}
                               {prop.setupLocation ? (
                                 <div className="text-slate-500 text-[11px] truncate max-w-[150px]">{prop.setupLocation}</div>
                               ) : (
-                                <div className="text-rose-600 font-extrabold animate-pulse">❌ 設置場所未入力</div>
+                                <div className="text-rose-600 font-extrabold">❌ 設置場所未入力</div>
                               )}
                             </div>
                           ) : (
@@ -467,7 +490,7 @@ export default function AdminPage() {
                         {/* スリッパ */}
                         <td className="px-4 py-4 whitespace-nowrap">
                           {prop.hasSlippers === '' ? (
-                            <span className="px-2 py-1 rounded bg-rose-600 text-white text-[11px] font-bold animate-pulse shadow-sm">
+                            <span className="px-2 py-1 rounded bg-rose-600 text-white text-[11px] font-bold shadow-sm">
                               ⚠️ 未設定
                             </span>
                           ) : prop.hasSlippers === 'あり' ? (
@@ -484,7 +507,7 @@ export default function AdminPage() {
                         {/* 売り看板 */}
                         <td className="px-4 py-4 whitespace-nowrap">
                           {prop.hasSignboard === '' ? (
-                            <span className="px-2 py-1 rounded bg-rose-600 text-white text-[11px] font-bold animate-pulse shadow-sm">
+                            <span className="px-2 py-1 rounded bg-rose-600 text-white text-[11px] font-bold shadow-sm">
                               ⚠️ 未設定
                             </span>
                           ) : prop.hasSignboard === 'あり' ? (
@@ -496,6 +519,32 @@ export default function AdminPage() {
                               なし
                             </span>
                           )}
+                        </td>
+
+                        {/* 公開資料（詳細資料 / ルームツアー動画 / 360°カメラのURL登録有無）
+                            判定は公開側カードと同じく、各URL文字列が非空かどうかで「あり／なし」を出し分ける。
+                            表示のみで編集不可。編集は「現況更新」画面で行う。 */}
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div className="space-y-0.5 text-[11px] leading-tight">
+                            {([
+                              { label: '資料', has: Boolean(prop.documentUrl) },
+                              { label: '動画', has: Boolean(prop.youtubeUrl) },
+                              { label: '360°', has: Boolean(prop.panoramaUrl) },
+                            ] as const).map((item) => (
+                              <div key={item.label} className="flex items-center gap-1.5">
+                                <span className="inline-block w-8 text-slate-500 font-medium">{item.label}</span>
+                                {item.has ? (
+                                  <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
+                                    あり
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-400">
+                                    なし
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </td>
 
                         {/* 操作 */}

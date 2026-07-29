@@ -1,8 +1,8 @@
 import { prisma } from '../../../../utils/db';
 import { getSession, unauthorized } from '../../../../utils/session';
 import { sendApprovalEmail } from '../../../../utils/mail';
-import { createCalendarEvent } from '../../../../utils/lineworks';
-import { findConflicts, conflictMessage } from '../../../../utils/schedule';
+import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '../../../../utils/lineworks';
+import { findConflicts, conflictMessage, validateSlot, formatTimeRange } from '../../../../utils/schedule';
 import { type NextRequest } from 'next/server';
 
 // 鍵情報の開示ステータス
@@ -14,7 +14,8 @@ export type KeyDisclosure = '開示中' | '未承認' | '期間前' | '期間終
  * 予約詳細URLが第三者に転送されても、期間外は鍵情報が表示されないようにするための制御。
  */
 function getKeyDisclosure(status: string, preferredDate: string): KeyDisclosure {
-  if (status !== '承認済') return '未承認';
+  // 承認済・日時変更（時間だけ変更した確定予約）のみ鍵情報を開示対象とする。
+  if (status !== '承認済' && status !== '日時変更') return '未承認';
 
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((preferredDate ?? '').trim());
   if (!m) return '日付不明';
@@ -92,7 +93,19 @@ export async function GET(
   });
 }
 
-// PATCH: 予約ステータス更新（管理者のみ）
+// PATCH: 予約の更新（管理者のみ）
+//   - { reschedule: { preferredDate?, startTime, endTime } } … 日時変更（開始・終了・日付を変更）
+//   - { status } … ステータス変更（未承認 / 承認済 / 日時変更 / キャンセル / 却下）
+// 既存の承認フロー（承認メール・カレンダー登録）は従来どおり維持する。
+const ALLOWED_STATUSES = ['未承認', '承認済', '日時変更', 'キャンセル', '却下'];
+const PROPERTY_SELECT = {
+  hasKeyBox: true,
+  keyBoxNumber: true,
+  unlockCode: true,
+  setupLocation: true,
+  salesRepEmail: true,
+} as const;
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -103,13 +116,81 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json();
 
-  if (!['未承認', '承認済', '却下'].includes(body.status)) {
-    return Response.json({ error: 'Invalid status' }, { status: 400 });
-  }
-
   const existing = await prisma.reservation.findUnique({ where: { id } });
   if (!existing) {
     return Response.json({ error: 'Reservation not found' }, { status: 404 });
+  }
+
+  // ───────────────────────────────────────────────
+  // 日時変更（電話連絡などで日時だけ変更したケース）
+  //   DB更新 → カレンダー更新 → 予約情報を返す。ステータスは「日時変更」に。
+  // ───────────────────────────────────────────────
+  if (body.reschedule) {
+    const date = String(body.reschedule.preferredDate ?? existing.preferredDate).trim();
+    const startTime = String(body.reschedule.startTime ?? '').trim();
+    const endTime = String(body.reschedule.endTime ?? '').trim();
+
+    const slotError = validateSlot(date, startTime, endTime);
+    if (slotError) {
+      return Response.json({ error: slotError }, { status: 400 });
+    }
+
+    // 変更後の枠が他の確定予約（承認済・日時変更・社内案内）と重ならないか確認（自分自身は除外）
+    const conflicts = await findConflicts(existing.propertyId, date, startTime, endTime, {
+      excludeReservationId: id,
+    });
+    if (conflicts.length > 0) {
+      return Response.json(
+        { error: conflictMessage(date, conflicts), conflicts },
+        { status: 409 }
+      );
+    }
+
+    const updated = await prisma.reservation.update({
+      where: { id },
+      data: {
+        preferredDate: date,
+        startTime,
+        endTime,
+        preferredTime: formatTimeRange(startTime, endTime),
+        status: '日時変更',
+      },
+      include: { property: { select: PROPERTY_SELECT } },
+    });
+
+    // LINE WORKSカレンダーを同期（未設定のローカルでは自動スキップ）。既存イベントは更新、無ければ新規作成。
+    const evtInput = {
+      category: '内見',
+      propertyName: updated.propertyName,
+      date: updated.preferredDate,
+      startTime: updated.startTime,
+      endTime: updated.endTime,
+      companyName: updated.companyName,
+      agentName: updated.agentName,
+      phone: updated.phone,
+      mobilePhone: updated.mobilePhone,
+      notes: updated.notes,
+    };
+    if (updated.calendarEventId) {
+      await updateCalendarEvent(updated.calendarEventId, evtInput);
+    } else {
+      const eventId = await createCalendarEvent(evtInput);
+      if (eventId !== null) {
+        await prisma.reservation.update({
+          where: { id },
+          data: { calendarEventId: eventId || 'registered' },
+        });
+      }
+    }
+
+    return Response.json(updated);
+  }
+
+  // ───────────────────────────────────────────────
+  // ステータス変更
+  // ───────────────────────────────────────────────
+  if (!ALLOWED_STATUSES.includes(body.status)) {
+    return Response.json({ error: 'Invalid status' }, { status: 400 });
   }
 
   // ③ 承認時点で他の確定予約と枠が重なっていないか再確認する。
@@ -134,17 +215,7 @@ export async function PATCH(
     const reservation = await prisma.reservation.update({
       where: { id },
       data: { status: body.status },
-      include: {
-        property: {
-          select: {
-            hasKeyBox: true,
-            keyBoxNumber: true,
-            unlockCode: true,
-            setupLocation: true,
-            salesRepEmail: true,
-          },
-        },
-      },
+      include: { property: { select: PROPERTY_SELECT } },
     });
 
     if (body.status === '承認済') {
@@ -172,6 +243,15 @@ export async function PATCH(
             data: { calendarEventId: eventId || 'registered' },
           });
         }
+      }
+    }
+
+    // キャンセル（仲介都合）・却下（弊社都合）は枠を空ける：確定していたカレンダー予定を削除する。
+    // 予約レコード自体は削除せず履歴として残す（ステータスで判別）。
+    if (body.status === 'キャンセル' || body.status === '却下') {
+      if (reservation.calendarEventId) {
+        await deleteCalendarEvent(reservation.calendarEventId);
+        await prisma.reservation.update({ where: { id }, data: { calendarEventId: '' } });
       }
     }
 

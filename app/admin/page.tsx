@@ -62,6 +62,26 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'properties' | 'reservations' | 'calendar'>('properties');
 
+  // 物件一覧のワード検索（物件名・住所の部分一致）。入力は即時反映しつつ、
+  // 描画負荷を抑えるため 200ms の debounce を挟んで絞り込みに用いる。
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 200);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // NFKC正規化＋小文字化で、全角/半角・大文字/小文字の違いを可能な範囲で無視して比較する。
+  const normalizeForSearch = (s: string) => s.normalize('NFKC').toLowerCase();
+  const query = normalizeForSearch(debouncedSearch.trim());
+  const filteredProperties = query
+    ? properties.filter(
+        (p) =>
+          normalizeForSearch(p.name).includes(query) ||
+          normalizeForSearch(p.address).includes(query)
+      )
+    : properties;
+
   // 固定領域（タイトル+タブ）を上部ヘッダー直下に貼り付けたうえで、一覧テーブルだけを内部スクロールさせる。
   // テーブル領域の高さ =「ビューポート高 - テーブル領域の上端位置」で算出し、固定領域と重ならず画面内に収める。
   // 固定領域の高さはレスポンシブで変わるため、テーブル領域の実際の上端を測って追従させる。
@@ -246,8 +266,12 @@ export default function AdminPage() {
     }
   };
 
-  // 予約ステータス更新 (承認/却下)
-  const handleUpdateStatus = async (resId: string, status: '承認済' | '却下') => {
+  // 予約ステータス更新 (承認/却下/キャンセル)
+  //   承認済 … 内見確定（メール・カレンダー登録）
+  //   却下   … 弊社都合で受けられない
+  //   キャンセル … 仲介会社からのキャンセル連絡
+  // ※日時変更（時間だけ変更）は社内カレンダーの日時変更フォームから行う。
+  const handleUpdateStatus = async (resId: string, status: '承認済' | '却下' | 'キャンセル') => {
     try {
       const res = await fetch(`/api/reservations/${resId}`, {
         method: 'PATCH',
@@ -329,8 +353,8 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="flex border-b border-slate-200 bg-white rounded-t-xl px-2 shadow-sm">
+        {/* Tab Switcher（左：タブ／右：物件検索窓）。狭い画面では折り返す。 */}
+        <div className="flex flex-wrap items-center gap-y-1 border-b border-slate-200 bg-white rounded-t-xl px-2 shadow-sm">
           <button
             onClick={() => setActiveTab('properties')}
             className={`px-5 py-4 text-sm font-bold border-b-2 transition-all duration-200 ${
@@ -371,6 +395,40 @@ export default function AdminPage() {
           >
             🗓️ 内見カレンダー（社内）
           </button>
+
+          {/* 物件管理タブのときのみ、タブ右側に物件名・住所のワード検索窓を表示 */}
+          {activeTab === 'properties' && (
+            <div className="ml-auto my-2 pr-1">
+              <div className="relative w-[280px] max-w-full">
+                {/* 虫眼鏡アイコン（左） */}
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="7" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                </span>
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="物件名・住所で検索"
+                  aria-label="物件名・住所で検索"
+                  className="w-full pl-9 pr-8 py-2 text-sm rounded-lg border border-slate-250 bg-slate-50 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => setSearch('')}
+                    aria-label="検索をクリア"
+                    title="クリア"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         </div>{/* /固定領域 */}
@@ -398,7 +456,13 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
-                  {properties.map((prop) => {
+                  {filteredProperties.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="px-6 py-16 text-center text-slate-500 text-sm font-medium">
+                        該当する物件がありません
+                      </td>
+                    </tr>
+                  ) : filteredProperties.map((prop) => {
                     const hasAlert = getPropertyAlerts(prop).length > 0;
                     return (
                       <tr 
@@ -642,35 +706,47 @@ export default function AdminPage() {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
                               res.status === '承認済' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                              res.status === '日時変更' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
                               res.status === '未承認' ? 'bg-amber-50 text-amber-700 border border-amber-250' :
-                              'bg-rose-50 text-rose-755 border border-rose-200'
+                              res.status === 'キャンセル' ? 'bg-slate-100 text-slate-600 border border-slate-300' :
+                              'bg-rose-50 text-rose-700 border border-rose-200'
                             }`}>
-                              {res.status}
+                              {res.status === '未承認' ? '承認待ち' : res.status}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-xs space-x-2">
-                            {res.status === '未承認' ? (
-                              <>
-                                <button
-                                  onClick={() => handleUpdateStatus(res.id, '承認済')}
-                                  className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm transition-colors"
-                                >
-                                  承認・鍵通知
-                                </button>
-                                <button
-                                  onClick={() => handleUpdateStatus(res.id, '却下')}
-                                  className="px-3 py-1.5 rounded bg-white hover:bg-slate-50 text-slate-600 border border-slate-250 shadow-sm transition-colors"
-                                >
-                                  却下
-                                </button>
-                              </>
-                            ) : (
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-xs space-x-2 space-y-1">
+                            {res.status === '未承認' && (
+                              <button
+                                onClick={() => handleUpdateStatus(res.id, '承認済')}
+                                className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm transition-colors"
+                              >
+                                承認・鍵通知
+                              </button>
+                            )}
+                            {(res.status === '承認済' || res.status === '日時変更') && (
                               <button
                                 onClick={() => setSelectedReservationForMail(res)}
                                 className="px-2.5 py-1.5 rounded bg-white hover:bg-slate-50 text-indigo-600 border border-slate-250 shadow-sm transition-colors font-bold"
                               >
                                 ✉️ メール確認
                               </button>
+                            )}
+                            {/* キャンセル（仲介都合）／却下（弊社都合）はアクティブな予約のみ */}
+                            {['未承認', '承認済', '日時変更'].includes(res.status) && (
+                              <>
+                                <button
+                                  onClick={() => { if (confirm(`仲介会社からのキャンセルとして「キャンセル」にします。\n履歴は残ります。よろしいですか？`)) handleUpdateStatus(res.id, 'キャンセル'); }}
+                                  className="px-2.5 py-1.5 rounded bg-white hover:bg-amber-50 text-amber-700 border border-amber-200 shadow-sm transition-colors font-bold"
+                                >
+                                  キャンセル
+                                </button>
+                                <button
+                                  onClick={() => { if (confirm(`弊社都合で受けられないため「却下」にします。\n履歴は残ります。よろしいですか？`)) handleUpdateStatus(res.id, '却下'); }}
+                                  className="px-2.5 py-1.5 rounded bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 shadow-sm transition-colors font-bold"
+                                >
+                                  却下
+                                </button>
+                              </>
                             )}
                             <button
                               onClick={() => handleDeleteReservation(res.id, `${res.companyName} / ${res.agentName} 様 (${res.preferredDate})`)}
@@ -692,7 +768,7 @@ export default function AdminPage() {
 
         {/* 3. 社内用 内見カレンダータブ */}
         {activeTab === 'calendar' && (
-          <CalendarTab properties={properties.map(p => ({ id: p.id, name: p.name }))} />
+          <CalendarTab properties={properties.map(p => ({ id: p.id, name: p.name, address: p.address }))} />
         )}
 
       </div>

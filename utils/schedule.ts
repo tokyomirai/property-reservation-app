@@ -74,9 +74,11 @@ export async function findConflicts(
   const end = toMinutes(endTime);
   if (start === null || end === null) return [];
 
+  // 「日時変更」は確定した内見予約（時間だけ変更したもの）なので、承認済と同様に枠を占有する。
+  // 「キャンセル」「却下」は枠を占有しないため対象外。
   const statuses = options.includePendingReservations
-    ? ['承認済', '未承認']
-    : ['承認済'];
+    ? ['承認済', '日時変更', '未承認']
+    : ['承認済', '日時変更'];
 
   const [reservations, internalBookings] = await Promise.all([
     prisma.reservation.findMany({
@@ -92,6 +94,8 @@ export async function findConflicts(
       where: {
         propertyId,
         date,
+        // キャンセルした社内案内は枠を占有しないため対象外
+        status: { not: 'キャンセル' },
         ...(options.excludeInternalBookingId ? { id: { not: options.excludeInternalBookingId } } : {}),
       },
       select: { id: true, staffName: true, startTime: true, endTime: true },

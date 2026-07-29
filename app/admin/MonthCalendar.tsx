@@ -9,8 +9,8 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import jaLocale from '@fullcalendar/core/locales/ja';
-import type { EventClickArg, EventInput, DateSelectArg } from '@fullcalendar/core';
-import type { DateClickArg } from '@fullcalendar/interaction';
+import type { EventClickArg, EventInput, DateSelectArg, EventDropArg } from '@fullcalendar/core';
+import type { DateClickArg, EventResizeDoneArg } from '@fullcalendar/interaction';
 import { CATEGORY_COLORS, type CalendarEntry } from './calendarTypes';
 
 interface Props {
@@ -21,6 +21,22 @@ interface Props {
   onSelectDate: (date: string) => void;
   /** ドラッグで時間帯を選択したとき（新規登録フォームを開く） */
   onSelectRange: (date: string, startTime: string, endTime: string) => void;
+  /** 既存の内見予約をドラッグ／リサイズで日時変更したとき。false を返すと元に戻す。 */
+  onReschedule?: (
+    entry: CalendarEntry,
+    date: string,
+    startTime: string,
+    endTime: string
+  ) => Promise<boolean>;
+}
+
+/** 日時変更（ドラッグ／リサイズ）を許可する予定か。時間指定あり かつ アクティブな予定のみ。 */
+function canReschedule(e: CalendarEntry): boolean {
+  if (!e.startTime || !e.endTime) return false;
+  if (e.kind === '内見予約') return ['未承認', '承認済', '日時変更'].includes(e.status);
+  // 社内案内予約はキャンセル以外（確定）を対象とする
+  if (e.kind === '社内案内予約') return e.status !== 'キャンセル';
+  return false;
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -32,6 +48,7 @@ export default function MonthCalendar({
   onSelectEntry,
   onSelectDate,
   onSelectRange,
+  onReschedule,
 }: Props) {
   const ref = useRef<FullCalendar>(null);
 
@@ -39,6 +56,8 @@ export default function MonthCalendar({
     const color = CATEGORY_COLORS[e.category];
     // 開始・終了が未設定の旧データは終日予定として表示する
     const timed = Boolean(e.startTime && e.endTime);
+    // 内見予約のアクティブな予定のみドラッグ／リサイズで日時変更可能にする
+    const editable = Boolean(onReschedule) && canReschedule(e);
     return {
       id: `${e.kind}-${e.id}`,
       title: e.propertyName,
@@ -48,6 +67,7 @@ export default function MonthCalendar({
       backgroundColor: color.bg,
       borderColor: color.bg,
       textColor: '#ffffff',
+      editable,
       extendedProps: { entry: e },
     };
   });
@@ -55,6 +75,19 @@ export default function MonthCalendar({
   const handleEventClick = (arg: EventClickArg) => {
     const entry = arg.event.extendedProps.entry as CalendarEntry;
     onSelectEntry(entry);
+  };
+
+  // ドラッグ移動／リサイズによる日時変更。編集可否は各イベントの editable(canReschedule) で制御済み。失敗時は元へ戻す。
+  const handleEventMutate = async (arg: EventDropArg | EventResizeDoneArg) => {
+    const entry = arg.event.extendedProps.entry as CalendarEntry | undefined;
+    const start = arg.event.start;
+    const end = arg.event.end;
+    if (!onReschedule || !entry || !start || !end) {
+      arg.revert();
+      return;
+    }
+    const ok = await onReschedule(entry, toDateStr(start), toTimeStr(start), toTimeStr(end));
+    if (!ok) arg.revert();
   };
 
   const handleDateClick = (arg: DateClickArg) => {
@@ -92,6 +125,12 @@ export default function MonthCalendar({
         eventDisplay="block"
         eventClick={handleEventClick}
         dateClick={handleDateClick}
+        // 日時変更（ドラッグ移動・リサイズ）。許可は各イベントの editable で個別制御する。
+        editable={Boolean(onReschedule)}
+        eventDrop={handleEventMutate}
+        eventResize={handleEventMutate}
+        eventStartEditable={Boolean(onReschedule)}
+        eventDurationEditable={Boolean(onReschedule)}
         selectable
         selectMirror
         // 単なるクリックで選択が走ると dateClick（その日の一覧）と競合するため、

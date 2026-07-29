@@ -77,6 +77,10 @@ model InternalBooking {
   startTime    String
   endTime      String
   notes        String   @default("")
+  // 確定 / キャンセル。キャンセルは枠を占有せず、カレンダー上はグレー表示（履歴は残す）。
+  status       String   @default("確定")
+  // LINE WORKSカレンダーに登録した予定のID（日時変更・キャンセル時の同期用）
+  calendarEventId String @default("")
   createdBy    String   @default("")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

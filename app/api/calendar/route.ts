@@ -42,8 +42,10 @@ export interface CalendarEntry {
 
 /** 内見予約のステータスを色分け区分へ変換する。 */
 function toCategory(status: string): CalendarCategory {
-  if (status === '承認済') return '仲介会社内見';
-  if (status === '却下') return 'キャンセル';
+  // 承認済・日時変更（時間だけ変更した確定予約）は「仲介会社内見」として青で表示
+  if (status === '承認済' || status === '日時変更') return '仲介会社内見';
+  // キャンセル（仲介都合）・却下（弊社都合）はどちらも赤の「キャンセル」区分で表示（詳細は個別ステータスで判別）
+  if (status === '却下' || status === 'キャンセル') return 'キャンセル';
   return '仮予約';
 }
 
@@ -97,7 +99,8 @@ export async function GET(request: NextRequest) {
     ...internalBookings.map((b) => ({
       id: b.id,
       kind: '社内案内予約' as const,
-      category: '社内案内' as const,
+      // キャンセルした社内案内は赤の「キャンセル」区分、それ以外は緑の「社内案内」
+      category: (b.status === 'キャンセル' ? 'キャンセル' : '社内案内') as CalendarCategory,
       propertyId: b.propertyId,
       propertyName: b.propertyName,
       date: b.date,
@@ -112,7 +115,7 @@ export async function GET(request: NextRequest) {
       cardMimeType: '',
       hasCard: false,
       notes: b.notes,
-      status: '確定',
+      status: b.status,
       createdAt: b.createdAt.toISOString(),
     })),
   ];

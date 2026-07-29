@@ -176,3 +176,110 @@ export async function createCalendarEvent(input: CalendarEventInput): Promise<st
     return null;
   }
 }
+
+/**
+ * 既存のLINE WORKSカレンダー予定を新しい日時・内容へ更新する（日時変更時に使用）。
+ * 設定が未投入・eventId不明・失敗時は false を返す（呼び出し元の処理は止めない）。
+ * 'registered' のようなダミーIDや空文字の場合は更新できないため false。
+ */
+export async function updateCalendarEvent(
+  eventId: string,
+  input: CalendarEventInput
+): Promise<boolean> {
+  const config = getConfig();
+  if (!config) {
+    console.warn('⚠️ LINE WORKS未設定のためカレンダー更新をスキップしました。');
+    return false;
+  }
+  const realId = (eventId ?? '').trim();
+  if (!realId || realId === 'registered') {
+    console.warn('⚠️ 有効なeventIdが無いためカレンダー更新をスキップしました:', eventId);
+    return false;
+  }
+
+  const summary = `【${input.category ?? '内見'}】${input.propertyName}`;
+  const description = [
+    `物件名　　：${input.propertyName}`,
+    `日時　　　：${input.date} ${input.startTime}〜${input.endTime}`,
+    `仲介会社名：${input.companyName || '（なし）'}`,
+    `担当者名　：${input.agentName || '（なし）'}`,
+    `会社電話　：${input.phone || '（未入力）'}`,
+    ...(input.mobilePhone ? [`担当者携帯：${input.mobilePhone}`] : []),
+    `備考　　　：${input.notes || '（なし）'}`,
+  ].join('\n');
+
+  const body = {
+    eventComponents: [
+      {
+        eventId: realId,
+        summary,
+        description,
+        start: { dateTime: `${input.date}T${input.startTime}:00`, timeZone: TIME_ZONE },
+        end: { dateTime: `${input.date}T${input.endTime}:00`, timeZone: TIME_ZONE },
+        visibility: 'PUBLIC',
+      },
+    ],
+  };
+
+  const base = config.calendarId
+    ? `${API_BASE}/users/${encodeURIComponent(config.calendarUser)}/calendars/${encodeURIComponent(config.calendarId)}/events`
+    : `${API_BASE}/users/${encodeURIComponent(config.calendarUser)}/calendar/events`;
+  const url = `${base}/${encodeURIComponent(realId)}`;
+
+  try {
+    const token = await getAccessToken(config);
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      console.error(`❌ LINE WORKSカレンダー更新エラー (HTTP ${res.status}):`, await res.text());
+      return false;
+    }
+    console.log(`✅ LINE WORKSカレンダー更新成功: ${summary} (${input.date} ${input.startTime}〜${input.endTime})`);
+    return true;
+  } catch (err) {
+    console.error('❌ LINE WORKSカレンダー更新で例外:', err);
+    return false;
+  }
+}
+
+/**
+ * LINE WORKSカレンダー予定を削除する（キャンセル・却下時に使用）。
+ * 設定が未投入・eventId不明・失敗時は false を返す（呼び出し元の処理は止めない）。
+ */
+export async function deleteCalendarEvent(eventId: string): Promise<boolean> {
+  const config = getConfig();
+  if (!config) {
+    console.warn('⚠️ LINE WORKS未設定のためカレンダー削除をスキップしました。');
+    return false;
+  }
+  const realId = (eventId ?? '').trim();
+  if (!realId || realId === 'registered') {
+    console.warn('⚠️ 有効なeventIdが無いためカレンダー削除をスキップしました:', eventId);
+    return false;
+  }
+
+  const base = config.calendarId
+    ? `${API_BASE}/users/${encodeURIComponent(config.calendarUser)}/calendars/${encodeURIComponent(config.calendarId)}/events`
+    : `${API_BASE}/users/${encodeURIComponent(config.calendarUser)}/calendar/events`;
+  const url = `${base}/${encodeURIComponent(realId)}`;
+
+  try {
+    const token = await getAccessToken(config);
+    const res = await fetch(url, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      console.error(`❌ LINE WORKSカレンダー削除エラー (HTTP ${res.status}):`, await res.text());
+      return false;
+    }
+    console.log(`✅ LINE WORKSカレンダー削除成功: ${realId}`);
+    return true;
+  } catch (err) {
+    console.error('❌ LINE WORKSカレンダー削除で例外:', err);
+    return false;
+  }
+}

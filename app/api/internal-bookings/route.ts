@@ -93,8 +93,8 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // ② 社内案内予約もLINE WORKSカレンダーへ登録する
-  await createCalendarEvent({
+  // ② 社内案内予約もLINE WORKSカレンダーへ登録する（イベントIDは後の日時変更・キャンセル同期用に保存）
+  const eventId = await createCalendarEvent({
     category: '社内案内',
     propertyName: booking.propertyName,
     date: booking.date,
@@ -105,6 +105,12 @@ export async function POST(request: NextRequest) {
     phone: '',
     notes: booking.notes,
   });
+  if (eventId !== null) {
+    await prisma.internalBooking.update({
+      where: { id: booking.id },
+      data: { calendarEventId: eventId || 'registered' },
+    });
+  }
 
   return Response.json(booking, { status: 201 });
 }

@@ -11,6 +11,7 @@ import {
   type CalendarEntry,
   type CalendarCategory,
 } from './calendarTypes';
+import PropertyCombobox from './PropertyCombobox';
 
 // FullCalendar はブラウザAPIに依存するためSSRを無効にして読み込む
 const MonthCalendar = dynamic(() => import('./MonthCalendar'), {
@@ -25,6 +26,7 @@ const MonthCalendar = dynamic(() => import('./MonthCalendar'), {
 interface PropertyOption {
   id: string;
   name: string;
+  address: string;
 }
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
@@ -72,6 +74,13 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
   };
   const [form, setForm] = useState(emptyForm);
 
+  // 内見予約の日時変更フォーム（詳細モーダル or ドラッグから開く）
+  const [reschedule, setReschedule] = useState<
+    { entry: CalendarEntry; date: string; startTime: string; endTime: string } | null
+  >(null);
+  const [rescheduleError, setRescheduleError] = useState('');
+  const [statusBusy, setStatusBusy] = useState(false);
+
   const refresh = useCallback(async () => {
     try {
       const res = await fetch('/api/calendar');
@@ -81,6 +90,132 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
       setEntries([]);
     }
   }, []);
+
+  /** 内見予約・社内案内予約の日時変更を適用（フォーム保存・ドラッグ共通）。成否とエラーメッセージを返す。 */
+  const applyReschedule = useCallback(
+    async (
+      entry: CalendarEntry,
+      date: string,
+      startTime: string,
+      endTime: string
+    ): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        // 予約種別ごとにエンドポイントとキー名（内見=preferredDate / 社内案内=date）を切り替える
+        const url =
+          entry.kind === '社内案内予約'
+            ? `/api/internal-bookings/${entry.id}`
+            : `/api/reservations/${entry.id}`;
+        const reschedule =
+          entry.kind === '社内案内予約'
+            ? { date, startTime, endTime }
+            : { preferredDate: date, startTime, endTime };
+        const res = await fetch(url, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reschedule }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) return { ok: false, error: data?.error || '日時変更に失敗しました。' };
+        await refresh();
+        return { ok: true };
+      } catch (err) {
+        console.error(err);
+        return { ok: false, error: '日時変更に失敗しました。' };
+      }
+    },
+    [refresh]
+  );
+
+  /** ステータス変更（キャンセル／却下）。 */
+  const handleStatusChange = useCallback(
+    async (entry: CalendarEntry, status: 'キャンセル' | '却下', label: string) => {
+      if (entry.kind !== '内見予約') return;
+      if (!confirm(`この内見予約を「${label}」にします。\n\n【${entry.propertyName} / ${entry.companyName}（${entry.date} ${entry.startTime}〜${entry.endTime}）】\n\n履歴は残ります。よろしいですか？`)) return;
+      setStatusBusy(true);
+      try {
+        const res = await fetch(`/api/reservations/${entry.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          alert(data?.error || 'ステータスの更新に失敗しました。');
+          return;
+        }
+        await refresh();
+        setDetail(null);
+      } finally {
+        setStatusBusy(false);
+      }
+    },
+    [refresh]
+  );
+
+  /** カレンダー上のドラッグ／リサイズによる日時変更。内見予約・社内案内予約が対象。失敗時は false を返し元に戻す。 */
+  const handleCalendarReschedule = useCallback(
+    async (entry: CalendarEntry, date: string, startTime: string, endTime: string): Promise<boolean> => {
+      const r = await applyReschedule(entry, date, startTime, endTime);
+      if (!r.ok) alert(r.error || '日時変更に失敗しました。');
+      return r.ok;
+    },
+    [applyReschedule]
+  );
+
+  /** 社内案内予約のキャンセル（ステータスをキャンセルに。履歴は残す）。 */
+  const handleCancelInternal = useCallback(
+    async (entry: CalendarEntry) => {
+      if (entry.kind !== '社内案内予約') return;
+      if (!confirm(`この社内案内をキャンセルしますか？\n\n【${entry.propertyName} / ${entry.personName}（${entry.date} ${entry.startTime}〜${entry.endTime}）】\n\n履歴は残ります。`)) return;
+      setStatusBusy(true);
+      try {
+        const res = await fetch(`/api/internal-bookings/${entry.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'キャンセル' }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          alert(data?.error || 'キャンセルに失敗しました。');
+          return;
+        }
+        await refresh();
+        setDetail(null);
+      } finally {
+        setStatusBusy(false);
+      }
+    },
+    [refresh]
+  );
+
+  /** 日時変更フォームを開く。 */
+  const openReschedule = (entry: CalendarEntry) => {
+    setReschedule({ entry, date: entry.date, startTime: entry.startTime, endTime: entry.endTime });
+    setRescheduleError('');
+    setDetail(null);
+  };
+
+  /** 日時変更フォームの保存。 */
+  const submitReschedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reschedule || statusBusy) return;
+    if (!reschedule.startTime || !reschedule.endTime) {
+      setRescheduleError('開始時間と終了時間を入力してください。');
+      return;
+    }
+    if (reschedule.endTime <= reschedule.startTime) {
+      setRescheduleError('終了時間は開始時間より後の時刻を指定してください。');
+      return;
+    }
+    setStatusBusy(true);
+    const r = await applyReschedule(reschedule.entry, reschedule.date, reschedule.startTime, reschedule.endTime);
+    setStatusBusy(false);
+    if (!r.ok) {
+      setRescheduleError(r.error || '日時変更に失敗しました。');
+      return;
+    }
+    setReschedule(null);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -108,6 +243,10 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
     e.preventDefault();
     if (submitting) return;
 
+    if (!form.propertyId) {
+      setError('物件を選択してください。');
+      return;
+    }
     if (form.endTime <= form.startTime) {
       setError('終了時間は開始時間より後の時刻を指定してください。');
       return;
@@ -200,6 +339,7 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
         onSelectEntry={setDetail}
         onSelectDate={setDayList}
         onSelectRange={openNewBooking}
+        onReschedule={handleCalendarReschedule}
       />
 
       {/* --- モーダル: その日の予約一覧 --- */}
@@ -357,19 +497,156 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
               </table>
             </div>
 
-            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex gap-3 shrink-0">
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex flex-wrap gap-2 shrink-0">
+              {/* 社内案内予約の運用操作：日時変更／キャンセル／削除（削除は完全削除の別機能） */}
               {detail.kind === '社内案内予約' && (
-                <button
-                  onClick={() => handleDelete(detail)}
-                  className="px-4 py-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs border border-rose-200"
-                >
-                  🗑 削除
-                </button>
+                <>
+                  {detail.status !== 'キャンセル' && (
+                    <>
+                      <button
+                        onClick={() => openReschedule(detail)}
+                        disabled={statusBusy}
+                        className="px-4 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 disabled:opacity-50"
+                      >
+                        🕒 日時変更
+                      </button>
+                      <button
+                        onClick={() => handleCancelInternal(detail)}
+                        disabled={statusBusy}
+                        className="px-4 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-xs border border-amber-200 disabled:opacity-50"
+                      >
+                        🚫 キャンセル
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => handleDelete(detail)}
+                    disabled={statusBusy}
+                    className="px-4 py-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs border border-rose-200 disabled:opacity-50"
+                  >
+                    🗑 削除
+                  </button>
+                </>
+              )}
+              {/* 内見予約の運用操作（アクティブな予約のみ）。キャンセル／却下済みは操作を出さない。 */}
+              {detail.kind === '内見予約' && ['未承認', '承認済', '日時変更'].includes(detail.status) && (
+                <>
+                  <button
+                    onClick={() => openReschedule(detail)}
+                    disabled={statusBusy}
+                    className="px-4 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 disabled:opacity-50"
+                  >
+                    🕒 日時変更
+                  </button>
+                  <button
+                    onClick={() => handleStatusChange(detail, 'キャンセル', 'キャンセル')}
+                    disabled={statusBusy}
+                    className="px-4 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-xs border border-amber-200 disabled:opacity-50"
+                  >
+                    🚫 キャンセル
+                  </button>
+                  <button
+                    onClick={() => handleStatusChange(detail, '却下', '却下')}
+                    disabled={statusBusy}
+                    className="px-4 py-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs border border-rose-200 disabled:opacity-50"
+                  >
+                    ⛔ 却下
+                  </button>
+                </>
               )}
               <button onClick={() => setDetail(null)} className="ml-auto px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm">
                 閉じる
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- モーダル: 内見予約の日時変更 --- */}
+      {reschedule && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => !statusBusy && setReschedule(null)}>
+          <div className="bg-white border border-slate-200 rounded-xl w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+              <h3 className="text-base font-bold text-slate-800">🕒 {reschedule.entry.kind === '社内案内予約' ? '社内案内の日時変更' : '内見予約の日時変更'}</h3>
+              <button onClick={() => !statusBusy && setReschedule(null)} className="text-slate-400 hover:text-slate-600 text-2xl font-bold">
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={submitReschedule} className="p-6 space-y-4">
+              <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                <div className="font-bold text-slate-800 break-words">{reschedule.entry.propertyName}</div>
+                <div className="mt-0.5">{reschedule.entry.companyName} / {reschedule.entry.personName} 様</div>
+                <div className="mt-0.5 text-slate-400">
+                  変更前: {reschedule.entry.date} {reschedule.entry.startTime}〜{reschedule.entry.endTime}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">日付 <span className="text-rose-500">*</span></label>
+                  <input
+                    type="date"
+                    required
+                    className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                    value={reschedule.date}
+                    onChange={(e) => setReschedule({ ...reschedule, date: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">開始 <span className="text-rose-500">*</span></label>
+                  <input
+                    type="time"
+                    required
+                    step={900}
+                    className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                    value={reschedule.startTime}
+                    onChange={(e) => setReschedule({ ...reschedule, startTime: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">終了 <span className="text-rose-500">*</span></label>
+                  <input
+                    type="time"
+                    required
+                    step={900}
+                    className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                    value={reschedule.endTime}
+                    onChange={(e) => setReschedule({ ...reschedule, endTime: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-400">
+                {reschedule.entry.kind === '社内案内予約'
+                  ? '保存するとDB・社内カレンダー・一覧が更新されます。'
+                  : '保存するとDB・社内カレンダー・予約情報が更新され、ステータスは「日時変更」になります。'}
+              </p>
+
+              {rescheduleError && (
+                <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold whitespace-pre-wrap leading-relaxed">
+                  ⚠️ {rescheduleError}
+                </div>
+              )}
+
+              <div className="border-t border-slate-200 pt-4 flex gap-3">
+                <button
+                  type="submit"
+                  disabled={statusBusy}
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-sm shadow-md"
+                >
+                  {statusBusy ? '保存中...' : '保存する'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReschedule(null)}
+                  disabled={statusBusy}
+                  className="px-4 py-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm border border-slate-250 disabled:opacity-50"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -390,17 +667,13 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
                   物件 <span className="text-rose-500">*</span>
                 </label>
-                <select
-                  required
-                  className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                {/* 検索付きコンボボックス：物件名・住所の部分一致で候補を絞り込む */}
+                <PropertyCombobox
+                  options={properties}
                   value={form.propertyId}
-                  onChange={(e) => setForm({ ...form, propertyId: e.target.value })}
-                >
-                  <option value="">-- 物件を選択 --</option>
-                  {properties.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
+                  onChange={(id) => setForm({ ...form, propertyId: id })}
+                  placeholder="物件名・住所で検索"
+                />
               </div>
 
               <div>

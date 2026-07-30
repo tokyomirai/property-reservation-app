@@ -23,7 +23,8 @@ export async function GET(
     if (session) {
       return Response.json(property);
     } else {
-      if (!property.isPublished) {
+      // 非公開、または「仕入決済前」（公開・販売不可）の物件は公開側に出さない
+      if (!property.isPublished || property.salesStatus === '仕入決済前') {
         return Response.json({ error: 'Property not found or not available' }, { status: 404 });
       }
       // 公開表示時はセキュリティ情報および管理情報を除外

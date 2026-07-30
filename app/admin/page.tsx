@@ -504,6 +504,7 @@ export default function AdminPage() {
                             prop.salesStatus === '申込あり' ? 'bg-amber-50 text-amber-700 border border-amber-250' :
                             prop.salesStatus === '契約予定' ? 'bg-purple-50 text-purple-700 border border-purple-200' :
                             prop.salesStatus === '契約済' ? 'bg-slate-100 text-slate-600 border border-slate-200' :
+                            prop.salesStatus === '仕入決済前' ? 'bg-orange-100 text-orange-800 border border-orange-300' :
                             'bg-rose-50 text-rose-700 border border-rose-200'
                           }`}>
                             {prop.salesStatus}
@@ -838,6 +839,7 @@ export default function AdminPage() {
                     <option value="契約予定">契約予定</option>
                     <option value="契約済">契約済</option>
                     <option value="募集停止中">募集停止中</option>
+                    <option value="仕入決済前">仕入決済前</option>
                   </select>
                 </div>
                 <div className="col-span-1">
@@ -961,7 +963,8 @@ export default function AdminPage() {
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">👤 担当営業メールアドレス (社内のみ・非公開)</label>
                   <input
-                    type="email"
+                    type="text"
+                    inputMode="email"
                     placeholder="例：tanaka@tokyomf.co.jp"
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                     value={newProp.salesRepEmail}
@@ -975,7 +978,8 @@ export default function AdminPage() {
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">詳細資料URL</label>
                     <input
-                      type="url"
+                      type="text"
+                      inputMode="url"
                       placeholder="https://..."
                       className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                       value={newProp.documentUrl}
@@ -988,7 +992,8 @@ export default function AdminPage() {
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">ルームツアー動画URL</label>
                     <input
-                      type="url"
+                      type="text"
+                      inputMode="url"
                       placeholder="https://www.youtube.com/watch?v=..."
                       className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                       value={newProp.youtubeUrl}
@@ -1001,7 +1006,8 @@ export default function AdminPage() {
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">360°カメラURL</label>
                     <input
-                      type="url"
+                      type="text"
+                      inputMode="url"
                       placeholder="https://..."
                       className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                       value={newProp.panoramaUrl}
@@ -1104,6 +1110,7 @@ export default function AdminPage() {
                     <option value="契約予定">契約予定</option>
                     <option value="契約済">契約済</option>
                     <option value="募集停止中">募集停止中</option>
+                    <option value="仕入決済前">仕入決済前</option>
                   </select>
                 </div>
                 <div className="col-span-1">
@@ -1226,7 +1233,8 @@ export default function AdminPage() {
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">👤 担当営業メールアドレス (社内のみ・非公開)</label>
                   <input
-                    type="email"
+                    type="text"
+                    inputMode="email"
                     placeholder="例：tanaka@tokyomf.co.jp"
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                     value={editingProperty.salesRepEmail}
@@ -1240,7 +1248,8 @@ export default function AdminPage() {
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">詳細資料URL</label>
                     <input
-                      type="url"
+                      type="text"
+                      inputMode="url"
                       placeholder="https://..."
                       className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                       value={editingProperty.documentUrl}
@@ -1253,7 +1262,8 @@ export default function AdminPage() {
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">ルームツアー動画URL</label>
                     <input
-                      type="url"
+                      type="text"
+                      inputMode="url"
                       placeholder="https://www.youtube.com/watch?v=..."
                       className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                       value={editingProperty.youtubeUrl}
@@ -1266,7 +1276,8 @@ export default function AdminPage() {
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1">360°カメラURL</label>
                     <input
-                      type="url"
+                      type="text"
+                      inputMode="url"
                       placeholder="https://..."
                       className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                       value={editingProperty.panoramaUrl}

@@ -52,15 +52,17 @@ export async function PATCH(
     });
 
     // LINE WORKSカレンダーを同期（未設定のローカルでは自動スキップ）
+    const isBroker = updated.bookingType === '仲介案内';
     const evtInput = {
-      category: '社内案内',
+      category: isBroker ? '仲介案内（アプリ外）' : '自社案内',
       propertyName: updated.propertyName,
       date: updated.date,
       startTime: updated.startTime,
       endTime: updated.endTime,
-      companyName: '（社内案内）',
-      agentName: updated.staffName,
-      phone: '',
+      companyName: isBroker ? updated.companyName : '（自社案内）',
+      agentName: isBroker ? updated.agentName : updated.staffName,
+      phone: updated.phone,
+      mobilePhone: updated.mobilePhone,
       notes: updated.notes,
     };
     if (updated.calendarEventId) {

@@ -66,13 +66,24 @@ model Reservation {
   @@index([propertyId, preferredDate])
 }
 
-/// 社内スタッフによる案内予約。仲介会社には一切公開しない。
+/// 管理画面から手動登録する予約。仲介会社には一切公開しない。
+/// bookingType で「自社案内」「仲介案内（アプリ外）」を区別する。
+/// 既存データは bookingType のデフォルト「自社案内」として扱われる。
 model InternalBooking {
   id           String   @id @default(cuid())
   propertyId   String
   property     Property @relation(fields: [propertyId], references: [id])
   propertyName String
+  // 予約種別: "自社案内" | "仲介案内"（既存データは自社案内）
+  bookingType  String   @default("自社案内")
+  // 自社案内: 弊社の案内担当者名
   staffName    String
+  // 仲介案内（アプリ外）用: 仲介会社情報
+  companyName  String   @default("")
+  agentName    String   @default("")
+  phone        String   @default("")
+  mobilePhone  String   @default("")
+  email        String   @default("")
   date         String
   startTime    String
   endTime      String

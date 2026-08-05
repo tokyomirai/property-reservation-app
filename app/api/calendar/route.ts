@@ -38,6 +38,10 @@ export interface CalendarEntry {
   notes: string;
   status: string;
   createdAt: string;
+  /** 手動予約の種別（内見予約フォーム由来は undefined、手動登録は 自社案内/仲介案内） */
+  bookingType?: '自社案内' | '仲介案内';
+  /** アプリ外の手動登録か（カレンダーで「手動」ラベル表示に使用） */
+  manual?: boolean;
 }
 
 /** 内見予約のステータスを色分け区分へ変換する。 */
@@ -96,28 +100,37 @@ export async function GET(request: NextRequest) {
       status: r.status,
       createdAt: r.createdAt.toISOString(),
     })),
-    ...internalBookings.map((b) => ({
-      id: b.id,
-      kind: '社内案内予約' as const,
-      // キャンセルした社内案内は赤の「キャンセル」区分、それ以外は緑の「社内案内」
-      category: (b.status === 'キャンセル' ? 'キャンセル' : '社内案内') as CalendarCategory,
-      propertyId: b.propertyId,
-      propertyName: b.propertyName,
-      date: b.date,
-      startTime: b.startTime,
-      endTime: b.endTime,
-      companyName: '社内案内',
-      personName: b.staffName,
-      phone: '',
-      mobilePhone: '',
-      email: '',
-      cardFileName: '',
-      cardMimeType: '',
-      hasCard: false,
-      notes: b.notes,
-      status: b.status,
-      createdAt: b.createdAt.toISOString(),
-    })),
+    ...internalBookings.map((b) => {
+      const isBroker = b.bookingType === '仲介案内';
+      // キャンセルは赤。それ以外は、自社案内=緑「社内案内」、仲介案内=青「仲介会社内見」。
+      const category: CalendarCategory =
+        b.status === 'キャンセル' ? 'キャンセル' : isBroker ? '仲介会社内見' : '社内案内';
+      return {
+        id: b.id,
+        kind: '社内案内予約' as const,
+        category,
+        propertyId: b.propertyId,
+        propertyName: b.propertyName,
+        date: b.date,
+        startTime: b.startTime,
+        endTime: b.endTime,
+        // 自社案内は会社名欄に「自社案内」、仲介案内は仲介会社名
+        companyName: isBroker ? b.companyName : '自社案内',
+        personName: isBroker ? b.agentName : b.staffName,
+        phone: isBroker ? b.phone : '',
+        mobilePhone: isBroker ? b.mobilePhone : '',
+        email: isBroker ? b.email : '',
+        cardFileName: '',
+        cardMimeType: '',
+        hasCard: false,
+        notes: b.notes,
+        status: b.status,
+        createdAt: b.createdAt.toISOString(),
+        bookingType: (isBroker ? '仲介案内' : '自社案内') as '自社案内' | '仲介案内',
+        // 手動登録テーブル由来はすべて手動。仲介案内のときに「手動/アプリ外」ラベルを出す。
+        manual: isBroker,
+      };
+    }),
   ];
 
   entries.sort((a, b) =>

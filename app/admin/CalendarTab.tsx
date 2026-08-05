@@ -65,8 +65,14 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
   const [submitting, setSubmitting] = useState(false);
 
   const emptyForm = {
+    bookingType: '自社案内' as '自社案内' | '仲介案内',
     propertyId: '',
-    staffName: '',
+    staffName: '',       // 自社案内: 弊社の案内担当者
+    companyName: '',     // 仲介案内: 仲介会社名
+    agentName: '',       // 仲介案内: 仲介担当者名
+    phone: '',           // 仲介案内: 会社電話番号
+    mobilePhone: '',     // 仲介案内: 担当者携帯番号
+    email: '',           // 仲介案内: メールアドレス
     date: todayIso(),
     startTime: '',
     endTime: '',
@@ -263,7 +269,7 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         // 重複時はサーバーが返す重複内容をそのまま表示する
-        setError(data?.error || '社内案内予約の登録に失敗しました。');
+        setError(data?.error || '手動予約の登録に失敗しました。');
         return;
       }
       await refresh();
@@ -271,7 +277,7 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
       setIsModalOpen(false);
     } catch (err) {
       console.error(err);
-      setError('社内案内予約の登録に失敗しました。');
+      setError('手動予約の登録に失敗しました。');
     } finally {
       setSubmitting(false);
     }
@@ -279,7 +285,7 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
 
   const handleDelete = async (entry: CalendarEntry) => {
     if (entry.kind !== '社内案内予約') return;
-    if (!confirm(`社内案内予約を削除します。\n\n【${entry.propertyName} / ${entry.personName}（${entry.date} ${entry.startTime}〜${entry.endTime}）】\n\nよろしいですか？`)) return;
+    if (!confirm(`手動予約を削除します（完全削除・履歴も残りません）。\n\n【${entry.propertyName} / ${entry.personName}（${entry.date} ${entry.startTime}〜${entry.endTime}）】\n\nよろしいですか？`)) return;
 
     try {
       const res = await fetch(`/api/internal-bookings/${entry.id}`, { method: 'DELETE' });
@@ -288,7 +294,7 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
       setDetail(null);
     } catch (err) {
       console.error(err);
-      alert('社内案内予約の削除に失敗しました。');
+      alert('手動予約の削除に失敗しました。');
     }
   };
 
@@ -311,7 +317,7 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
             <span>🔒</span> 社内用 内見カレンダー
           </h2>
           <p className="text-[11px] text-slate-500 mt-0.5 font-medium">
-            日付をクリックするとその日の予約一覧、予定をクリックすると詳細を表示します。ドラッグで社内案内予約を登録できます。
+            日付をクリックするとその日の予約一覧、予定をクリックすると詳細を表示します。ドラッグで手動予約を登録できます。
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -328,7 +334,7 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
             onClick={() => openNewBooking(todayIso(), '', '')}
             className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/10 transition-colors whitespace-nowrap"
           >
-            ➕ 社内案内予約を登録
+            ➕ 手動予約を登録
           </button>
         </div>
       </div>
@@ -387,7 +393,7 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
                 onClick={() => { openNewBooking(dayList, '', ''); setDayList(null); }}
                 className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm"
               >
-                ➕ この日に社内案内予約を登録
+                ➕ この日に手動予約を登録
               </button>
               <button onClick={() => setDayList(null)} className="px-4 py-2 rounded-lg bg-white hover:bg-slate-100 text-slate-600 font-bold text-xs border border-slate-250">
                 閉じる
@@ -403,7 +409,20 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
           <div className="bg-white border border-slate-200 rounded-xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
             <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-start gap-3 shrink-0" style={{ backgroundColor: `${CATEGORY_COLORS[detail.category].bg}0f` }}>
               <div className="min-w-0">
-                <CategoryChip category={detail.category} />
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <CategoryChip category={detail.category} />
+                  {/* 手動登録（アプリ外）の識別ラベル */}
+                  {detail.manual && (
+                    <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border bg-slate-100 text-slate-600 border-slate-300">
+                      手動・アプリ外
+                    </span>
+                  )}
+                  {detail.kind === '社内案内予約' && detail.bookingType === '自社案内' && (
+                    <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border bg-slate-100 text-slate-600 border-slate-300">
+                      手動登録
+                    </span>
+                  )}
+                </div>
                 <h3 className="text-base font-extrabold text-slate-900 mt-1.5 break-words">{detail.propertyName}</h3>
                 <p className="text-xs text-slate-600 font-mono mt-0.5">
                   {formatDateLabel(detail.date)}{' '}
@@ -420,19 +439,19 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
                 <tbody className="divide-y divide-slate-100">
                   <tr>
                     <td className="py-2.5 text-slate-400 font-medium w-32 align-top">
-                      {detail.kind === '社内案内予約' ? '担当者' : '仲介会社'}
+                      {(detail.kind === '内見予約' || detail.bookingType === '仲介案内') ? '仲介会社' : '担当者'}
                     </td>
                     <td className="py-2.5 text-slate-800 font-bold">
-                      {detail.kind === '社内案内予約' ? detail.personName : detail.companyName}
+                      {(detail.kind === '内見予約' || detail.bookingType === '仲介案内') ? detail.companyName : detail.personName}
                     </td>
                   </tr>
-                  {detail.kind === '内見予約' && (
+                  {(detail.kind === '内見予約' || detail.bookingType === '仲介案内') && (
                     <tr>
                       <td className="py-2.5 text-slate-400 font-medium align-top">ご担当者名</td>
                       <td className="py-2.5 text-slate-700 font-medium">{detail.personName} 様</td>
                     </tr>
                   )}
-                  {detail.kind === '内見予約' && (
+                  {(detail.kind === '内見予約' || detail.bookingType === '仲介案内') && (
                     <>
                       <tr>
                         <td className="py-2.5 text-slate-400 font-medium align-top">会社電話番号</td>
@@ -461,28 +480,35 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
                       <tr>
                         <td className="py-2.5 text-slate-400 font-medium align-top">メールアドレス</td>
                         <td className="py-2.5">
-                          <a href={`mailto:${detail.email}`} className="text-slate-700 font-mono hover:text-indigo-600 break-all">
-                            {detail.email}
-                          </a>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td className="py-2.5 text-slate-400 font-medium align-top">名刺</td>
-                        <td className="py-2.5">
-                          {detail.hasCard ? (
-                            <a
-                              href={`/api/reservations/${detail.id}/card`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold transition-colors"
-                            >
-                              💳 {detail.cardFileName} を開く
+                          {detail.email ? (
+                            <a href={`mailto:${detail.email}`} className="text-slate-700 font-mono hover:text-indigo-600 break-all">
+                              {detail.email}
                             </a>
                           ) : (
-                            <span className="text-slate-400">アップロードなし</span>
+                            <span className="text-slate-400">未入力</span>
                           )}
                         </td>
                       </tr>
+                      {/* 名刺は仲介会社向け予約フォーム由来のみ（手動登録は名刺なし） */}
+                      {detail.kind === '内見予約' && (
+                        <tr>
+                          <td className="py-2.5 text-slate-400 font-medium align-top">名刺</td>
+                          <td className="py-2.5">
+                            {detail.hasCard ? (
+                              <a
+                                href={`/api/reservations/${detail.id}/card`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[11px] font-bold transition-colors"
+                              >
+                                💳 {detail.cardFileName} を開く
+                              </a>
+                            ) : (
+                              <span className="text-slate-400">アップロードなし</span>
+                            )}
+                          </td>
+                        </tr>
+                      )}
                     </>
                   )}
                   <tr>
@@ -656,13 +682,43 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 rounded-xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
             <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-slate-800">🗓️ 社内案内予約の登録</h3>
+              <h3 className="text-lg font-bold text-slate-800">🗓️ 手動予約の登録</h3>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 text-2xl font-bold">
                 &times;
               </button>
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+              {/* 予約種別（必須・切替で入力欄が変わる） */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">
+                  予約種別 <span className="text-rose-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { key: '自社案内', label: '🟢 自社案内', desc: '弊社スタッフの案内' },
+                    { key: '仲介案内', label: '🔵 仲介案内（アプリ外）', desc: '電話/メール等で受けた予約' },
+                  ] as const).map((opt) => {
+                    const active = form.bookingType === opt.key;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => setForm({ ...form, bookingType: opt.key })}
+                        className={`text-left rounded-lg border-2 px-3 py-2.5 transition-colors ${
+                          active
+                            ? 'border-indigo-500 bg-indigo-50'
+                            : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <div className={`text-sm font-bold ${active ? 'text-indigo-700' : 'text-slate-700'}`}>{opt.label}</div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">{opt.desc}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
                   物件 <span className="text-rose-500">*</span>
@@ -676,19 +732,60 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-                  担当者 <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="例：山田 太郎"
-                  className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
-                  value={form.staffName}
-                  onChange={(e) => setForm({ ...form, staffName: e.target.value })}
-                />
-              </div>
+              {/* 自社案内: 自社担当者のみ */}
+              {form.bookingType === '自社案内' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                    自社担当者 <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="例：山田 太郎"
+                    className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                    value={form.staffName}
+                    onChange={(e) => setForm({ ...form, staffName: e.target.value })}
+                  />
+                </div>
+              )}
+
+              {/* 仲介案内（アプリ外）: 仲介会社情報 */}
+              {form.bookingType === '仲介案内' && (
+                <div className="space-y-4 rounded-lg border border-blue-200 bg-blue-50/40 p-3">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">仲介会社名 <span className="text-rose-500">*</span></label>
+                      <input type="text" required placeholder="例：みらい不動産株式会社"
+                        className="w-full bg-white border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500"
+                        value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">ご担当者名 <span className="text-rose-500">*</span></label>
+                      <input type="text" required placeholder="例：鈴木 花子"
+                        className="w-full bg-white border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500"
+                        value={form.agentName} onChange={(e) => setForm({ ...form, agentName: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">会社電話番号</label>
+                      <input type="text" inputMode="tel" placeholder="例：03-1234-5678"
+                        className="w-full bg-white border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500"
+                        value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-1">担当者携帯番号</label>
+                      <input type="text" inputMode="tel" placeholder="例：090-1234-5678"
+                        className="w-full bg-white border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500"
+                        value={form.mobilePhone} onChange={(e) => setForm({ ...form, mobilePhone: e.target.value })} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">メールアドレス</label>
+                    <input type="text" inputMode="email" placeholder="例：agent@example.com"
+                      className="w-full bg-white border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500"
+                      value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-3 gap-4">
                 <div>

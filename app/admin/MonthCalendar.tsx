@@ -157,6 +157,10 @@ export default function MonthCalendar({
             >
               <div className="text-[11px] font-bold truncate">
                 {isMonth && time && <span className="font-mono mr-1">{entry.startTime}</span>}
+                {/* アプリ外の手動登録（仲介案内）は「手動」ラベルを付けて区別する */}
+                {entry.manual && (
+                  <span className="mr-1 px-1 rounded bg-white/30 text-[9px] font-bold align-middle">手動</span>
+                )}
                 {entry.propertyName}
               </div>
               {!isMonth && (

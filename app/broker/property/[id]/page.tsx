@@ -222,6 +222,7 @@ export default function PropertyDetailPage({ params }: PageProps) {
               property.viewingStatus === '内見可能' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
               property.viewingStatus === 'リフォーム後の予約受付中' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
               property.viewingStatus === 'リフォーム中' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+              property.viewingStatus === '解体中' ? 'bg-stone-200 text-stone-700 border border-stone-300' :
               'bg-rose-50 text-rose-700 border border-rose-200'
             }`}>
               内見状況: {property.viewingStatus}

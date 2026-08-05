@@ -22,6 +22,10 @@ export interface CalendarEntry {
   notes: string;
   status: string;
   createdAt: string;
+  /** 手動予約の種別（フォーム由来の内見予約は undefined） */
+  bookingType?: '自社案内' | '仲介案内';
+  /** アプリ外の手動登録か（「手動」ラベル表示に使用） */
+  manual?: boolean;
 }
 
 /** 区分ごとの配色。カレンダー本体と凡例・詳細で共通に使う。 */

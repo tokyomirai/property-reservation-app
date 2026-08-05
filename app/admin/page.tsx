@@ -517,6 +517,7 @@ export default function AdminPage() {
                             prop.viewingStatus === '内見可能' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
                             prop.viewingStatus === 'リフォーム後の予約受付中' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
                             prop.viewingStatus === 'リフォーム中' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+                            prop.viewingStatus === '解体中' ? 'bg-stone-200 text-stone-700 border border-stone-300' :
                             'bg-rose-50 text-rose-700 border border-rose-200'
                           }`}>
                             {prop.viewingStatus}
@@ -852,6 +853,7 @@ export default function AdminPage() {
                     <option value="内見可能">内見可能</option>
                     <option value="リフォーム後の予約受付中">リフォーム後の予約受付中</option>
                     <option value="リフォーム中">リフォーム中</option>
+                    <option value="解体中">解体中</option>
                     <option value="内見不可">内見不可</option>
                   </select>
                 </div>
@@ -1123,6 +1125,7 @@ export default function AdminPage() {
                     <option value="内見可能">内見可能</option>
                     <option value="リフォーム後の予約受付中">リフォーム後の予約受付中</option>
                     <option value="リフォーム中">リフォーム中</option>
+                    <option value="解体中">解体中</option>
                     <option value="内見不可">内見不可</option>
                   </select>
                 </div>

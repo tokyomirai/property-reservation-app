@@ -514,13 +514,15 @@ export default function AdminPage() {
                         {/* 内見状況 */}
                         <td className="px-4 py-4 whitespace-nowrap">
                           <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                            // 非公開×内見可能は「公開後内見可能」として落ち着いた色で表示（強く予約可能に見せない）
+                            (!prop.isPublished && prop.viewingStatus === '内見可能') ? 'bg-slate-100 text-slate-600 border border-slate-300' :
                             prop.viewingStatus === '内見可能' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
                             prop.viewingStatus === 'リフォーム後の予約受付中' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
                             prop.viewingStatus === 'リフォーム中' ? 'bg-orange-50 text-orange-700 border border-orange-200' :
                             prop.viewingStatus === '解体中' ? 'bg-stone-200 text-stone-700 border border-stone-300' :
                             'bg-rose-50 text-rose-700 border border-rose-200'
                           }`}>
-                            {prop.viewingStatus}
+                            {(!prop.isPublished && prop.viewingStatus === '内見可能') ? '公開後内見可能' : prop.viewingStatus}
                           </span>
                         </td>
 

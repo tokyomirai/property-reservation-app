@@ -128,13 +128,21 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 物件の存在確認（公開物件のみ受付）
-  const property = await prisma.property.findFirst({
-    where: { id: body.propertyId, isPublished: true },
+  // 物件の存在確認
+  const property = await prisma.property.findUnique({
+    where: { id: body.propertyId },
   });
 
   if (!property) {
     return Response.json({ error: 'Property not found or not available' }, { status: 404 });
+  }
+
+  // 非公開物件は予約不可（見た目だけでなくサーバー側でも拒否。フォームURL直アクセス・直接リクエスト対策）
+  if (!property.isPublished) {
+    return Response.json(
+      { error: 'この物件は現在非公開のため、内見予約を受け付けていません。' },
+      { status: 403 }
+    );
   }
 
   // ③ 確定済みの内見予約・社内案内予約と時間帯が重なる申込みは受け付けない

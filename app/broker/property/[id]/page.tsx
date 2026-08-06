@@ -114,6 +114,11 @@ export default function PropertyDetailPage({ params }: PageProps) {
     e.preventDefault();
     if (!property || submitting) return;
 
+    if (!property.isPublished) {
+      setFormError('この物件は現在非公開のため、内見予約を受け付けていません。');
+      return;
+    }
+
     if (property.viewingStatus !== '内見可能' && property.viewingStatus !== 'リフォーム後の予約受付中') {
       setFormError('現在、この物件は内見をお申込みいただけません。');
       return;
@@ -246,7 +251,12 @@ export default function PropertyDetailPage({ params }: PageProps) {
             </p>
           </div>
 
-          {!isViewable ? (
+          {!property.isPublished ? (
+            // 非公開は公開状況を優先し、予約受付対象外（社内ログインで直接開いた場合も申込不可）
+            <div className="p-4 rounded-lg bg-slate-100 text-slate-500 border border-slate-200 text-xs sm:text-sm text-center font-semibold">
+              非公開のため内見予約受付対象外
+            </div>
+          ) : !isViewable ? (
             <div className="p-4 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 text-xs sm:text-sm text-center font-semibold animate-pulse">
               ⚠️ 現在、この物件は <strong>{property.viewingStatus}</strong> のため内見予約を受け付けておりません。
             </div>

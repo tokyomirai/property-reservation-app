@@ -180,8 +180,16 @@ export default function BrokerPage() {
 
                     {/* Booking Action */}
                     <div className="mt-6">
-                      {isViewable ? (
-                        <Link 
+                      {!prop.isPublished ? (
+                        // 非公開は公開状況を優先し、予約不可（社内ログインで表示された場合も予約させない）
+                        <button
+                          disabled
+                          className="block w-full text-center px-4 py-2.5 rounded-lg bg-slate-100 text-slate-400 text-xs font-bold cursor-not-allowed border border-slate-200"
+                        >
+                          非公開のため内見予約受付対象外
+                        </button>
+                      ) : isViewable ? (
+                        <Link
                           href={`/broker/property/${prop.id}`}
                           className="block w-full text-center px-4 py-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-emerald-600 hover:opacity-95 text-white text-xs font-bold tracking-wide transition-all shadow-md shadow-emerald-600/10"
                         >
@@ -192,7 +200,7 @@ export default function BrokerPage() {
                           disabled
                           className="block w-full text-center px-4 py-2.5 rounded-lg bg-slate-100 text-slate-400 text-xs font-bold cursor-not-allowed border border-slate-200"
                         >
-                          現在内見不可 ({prop.viewingStatus})
+                          {prop.viewingStatus === '内見不可' ? '現在内見不可' : `現在内見不可（${prop.viewingStatus}）`}
                         </button>
                       )}
 

@@ -42,6 +42,9 @@ export interface CalendarEntry {
   bookingType?: '自社案内' | '仲介案内';
   /** アプリ外の手動登録か（カレンダーで「手動」ラベル表示に使用） */
   manual?: boolean;
+  /** 手動予約の登録者（Google表示名・メール。内見予約フォーム由来は空） */
+  createdByName?: string;
+  createdByEmail?: string;
 }
 
 /** 内見予約のステータスを色分け区分へ変換する。 */
@@ -129,6 +132,8 @@ export async function GET(request: NextRequest) {
         bookingType: (isBroker ? '仲介案内' : '自社案内') as '自社案内' | '仲介案内',
         // 手動登録テーブル由来はすべて手動。仲介案内のときに「手動/アプリ外」ラベルを出す。
         manual: isBroker,
+        createdByName: b.createdBy,
+        createdByEmail: b.createdByEmail,
       };
     }),
   ];

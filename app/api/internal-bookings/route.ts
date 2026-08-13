@@ -1,7 +1,8 @@
 import { prisma } from '../../../utils/db';
 import { getSession, unauthorized } from '../../../utils/session';
 import { createCalendarEvent } from '../../../utils/lineworks';
-import { validateSlot, findConflicts, conflictMessage } from '../../../utils/schedule';
+import { validateSlot, findConflicts, conflictMessage, formatTimeRange } from '../../../utils/schedule';
+import { recordOperationLog } from '../../../utils/operationLog';
 import { type NextRequest } from 'next/server';
 
 // 手動予約（自社案内 / 仲介案内アプリ外）。仲介会社には一切公開せず、社内ログイン時のみ操作できる。
@@ -122,7 +123,17 @@ export async function POST(request: NextRequest) {
       endTime: fields.endTime,
       notes: fields.notes,
       createdBy: session.name,
+      createdByEmail: session.email,
     },
+  });
+
+  // 操作履歴（登録）: 誰がこの手動予約を登録したかを残す
+  await recordOperationLog(session, {
+    targetType: 'internalBooking',
+    targetId: booking.id,
+    action: '登録',
+    beforeValue: '',
+    afterValue: `${bookingType}／${booking.propertyName}／${booking.date} ${formatTimeRange(booking.startTime, booking.endTime)}`,
   });
 
   // 手動予約もLINE WORKSカレンダーへ登録する（イベントIDは後の日時変更・キャンセル同期用に保存）

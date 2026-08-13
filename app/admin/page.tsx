@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import CalendarTab from './CalendarTab';
+import OperationHistoryModal from './OperationHistoryModal';
 import { COMPANY_NAME, COMPANY_PHONE, CANCEL_NOTICE_TITLE } from '../../utils/company';
 import { cardKindLabel } from '../../utils/businessCard';
 import { formatViewingSlash } from '../../utils/viewingWindow';
@@ -51,6 +52,10 @@ interface Reservation {
   endTime: string;
   notes: string;
   status: string;
+  // 最終処理者（承認/却下/日時変更/キャンセルを行ったログインユーザー）。過去データは空＝記録なし。
+  processedByName?: string;
+  processedByEmail?: string;
+  processedAt?: string | null;
   createdAt: string;
 }
 
@@ -113,6 +118,8 @@ export default function AdminPage() {
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedReservationForMail, setSelectedReservationForMail] = useState<Reservation | null>(null);
+  // 操作履歴モーダルの対象（予約／手動予約）
+  const [historyTarget, setHistoryTarget] = useState<{ type: 'reservation' | 'internalBooking'; id: string; title: string } | null>(null);
 
   // 新規登録フォーム用State
   const [newProp, setNewProp] = useState<Omit<Property, 'id' | 'lastUpdatedBy' | 'updatedAt'>>({
@@ -727,6 +734,23 @@ export default function AdminPage() {
                             }`}>
                               {res.status === '未承認' ? '承認待ち' : res.status}
                             </span>
+                            {/* 処理済み（未承認以外）の予約は最終処理者を表示。過去データは「記録なし」。 */}
+                            {res.status !== '未承認' && (
+                              <div className="mt-1.5 text-[11px] leading-tight">
+                                {res.processedAt ? (
+                                  <>
+                                    <div className="text-slate-600 font-bold">
+                                      処理：{res.processedByName || res.processedByEmail || '記録なし'}
+                                    </div>
+                                    <div className="text-slate-400 font-mono">
+                                      {new Date(res.processedAt).toLocaleString('ja-JP')}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div className="text-slate-400">処理担当者：記録なし</div>
+                                )}
+                              </div>
+                            )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-xs space-x-2 space-y-1">
                             {res.status === '未承認' && (
@@ -762,6 +786,13 @@ export default function AdminPage() {
                                 </button>
                               </>
                             )}
+                            <button
+                              onClick={() => setHistoryTarget({ type: 'reservation', id: res.id, title: `${res.propertyName}／${res.companyName} ${res.agentName} 様` })}
+                              title="この予約の操作履歴を表示します"
+                              className="px-2.5 py-1.5 rounded bg-white hover:bg-slate-50 text-slate-600 border border-slate-250 shadow-sm transition-colors font-bold"
+                            >
+                              🕓 履歴
+                            </button>
                             <button
                               onClick={() => handleDeleteReservation(res.id, `${res.companyName} / ${res.agentName} 様 (${res.preferredDate})`)}
                               title="この予約データを削除します"
@@ -1356,6 +1387,16 @@ export default function AdminPage() {
       )}
 
       {/* --- モーダル: 自動送信メールシミュレーター --- */}
+      {/* 操作履歴モーダル（予約／手動予約 共通） */}
+      {historyTarget && (
+        <OperationHistoryModal
+          targetType={historyTarget.type}
+          targetId={historyTarget.id}
+          title={historyTarget.title}
+          onClose={() => setHistoryTarget(null)}
+        />
+      )}
+
       {selectedReservationForMail && (() => {
         const prop = getPropertyForReservation(selectedReservationForMail.propertyId);
         return (

@@ -3,6 +3,7 @@ import { getSession, unauthorized } from '../../../../utils/session';
 import { sendApprovalEmail } from '../../../../utils/mail';
 import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '../../../../utils/lineworks';
 import { findConflicts, conflictMessage, validateSlot, formatTimeRange } from '../../../../utils/schedule';
+import { recordOperationLog, processedByFields, reservationActionLabel } from '../../../../utils/operationLog';
 import { type NextRequest } from 'next/server';
 
 // 鍵情報の開示ステータス
@@ -154,8 +155,18 @@ export async function PATCH(
         endTime,
         preferredTime: formatTimeRange(startTime, endTime),
         status: '日時変更',
+        ...processedByFields(session),
       },
       include: { property: { select: PROPERTY_SELECT } },
+    });
+
+    // 操作履歴（日時変更）: 変更前・変更後の日付＋時間帯を残す
+    await recordOperationLog(session, {
+      targetType: 'reservation',
+      targetId: id,
+      action: '日時変更',
+      beforeValue: `${existing.preferredDate} ${formatTimeRange(existing.startTime, existing.endTime)}`,
+      afterValue: `${date} ${formatTimeRange(startTime, endTime)}`,
     });
 
     // LINE WORKSカレンダーを同期（未設定のローカルでは自動スキップ）。既存イベントは更新、無ければ新規作成。
@@ -214,8 +225,17 @@ export async function PATCH(
   try {
     const reservation = await prisma.reservation.update({
       where: { id },
-      data: { status: body.status },
+      data: { status: body.status, ...processedByFields(session) },
       include: { property: { select: PROPERTY_SELECT } },
+    });
+
+    // 操作履歴（承認/却下/キャンセル等）: 変更前後のステータスを残す
+    await recordOperationLog(session, {
+      targetType: 'reservation',
+      targetId: id,
+      action: reservationActionLabel(body.status),
+      beforeValue: existing.status,
+      afterValue: body.status,
     });
 
     if (body.status === '承認済') {
@@ -273,7 +293,18 @@ export async function DELETE(
   const { id } = await params;
 
   try {
+    // 削除前に内容を控えて操作履歴を残す（レコード削除後もログは残る）
+    const existing = await prisma.reservation.findUnique({ where: { id } });
     await prisma.reservation.delete({ where: { id } });
+    if (existing) {
+      await recordOperationLog(session, {
+        targetType: 'reservation',
+        targetId: id,
+        action: '削除',
+        beforeValue: `${existing.status}／${existing.propertyName}／${existing.preferredDate} ${formatTimeRange(existing.startTime, existing.endTime)}`,
+        afterValue: '（削除）',
+      });
+    }
     return Response.json({ success: true });
   } catch {
     return Response.json({ error: 'Reservation not found' }, { status: 404 });

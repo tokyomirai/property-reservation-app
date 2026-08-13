@@ -26,6 +26,9 @@ export interface CalendarEntry {
   bookingType?: '自社案内' | '仲介案内';
   /** アプリ外の手動登録か（「手動」ラベル表示に使用） */
   manual?: boolean;
+  /** 手動予約の登録者（Google表示名・メール。内見予約フォーム由来は空） */
+  createdByName?: string;
+  createdByEmail?: string;
 }
 
 /** 区分ごとの配色。カレンダー本体と凡例・詳細で共通に使う。 */

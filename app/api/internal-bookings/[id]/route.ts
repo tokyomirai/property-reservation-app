@@ -1,7 +1,8 @@
 import { prisma } from '../../../../utils/db';
 import { getSession, unauthorized } from '../../../../utils/session';
 import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '../../../../utils/lineworks';
-import { validateSlot, findConflicts, conflictMessage } from '../../../../utils/schedule';
+import { validateSlot, findConflicts, conflictMessage, formatTimeRange } from '../../../../utils/schedule';
+import { recordOperationLog, processedByFields } from '../../../../utils/operationLog';
 import { type NextRequest } from 'next/server';
 
 // PATCH: 社内案内予約の更新（社内のみ）
@@ -48,7 +49,16 @@ export async function PATCH(
 
     const updated = await prisma.internalBooking.update({
       where: { id },
-      data: { date, startTime, endTime, status: '確定' },
+      data: { date, startTime, endTime, status: '確定', ...processedByFields(session) },
+    });
+
+    // 操作履歴（日時変更）: 変更前・変更後の日付＋時間帯
+    await recordOperationLog(session, {
+      targetType: 'internalBooking',
+      targetId: id,
+      action: '日時変更',
+      beforeValue: `${existing.date} ${formatTimeRange(existing.startTime, existing.endTime)}`,
+      afterValue: `${date} ${formatTimeRange(startTime, endTime)}`,
     });
 
     // LINE WORKSカレンダーを同期（未設定のローカルでは自動スキップ）
@@ -87,7 +97,16 @@ export async function PATCH(
 
   const updated = await prisma.internalBooking.update({
     where: { id },
-    data: { status: body.status },
+    data: { status: body.status, ...processedByFields(session) },
+  });
+
+  // 操作履歴（確定/キャンセル）: 変更前後のステータス
+  await recordOperationLog(session, {
+    targetType: 'internalBooking',
+    targetId: id,
+    action: body.status,
+    beforeValue: existing.status,
+    afterValue: body.status,
   });
 
   // キャンセル時は確定していたカレンダー予定を削除して枠を空ける（レコードは履歴として残す）。
@@ -110,7 +129,19 @@ export async function DELETE(
   const { id } = await params;
 
   try {
+    // 削除前に内容を控えて操作履歴を残す（レコード削除後もログは残る）
+    const existing = await prisma.internalBooking.findUnique({ where: { id } });
     await prisma.internalBooking.delete({ where: { id } });
+    if (existing) {
+      const who = existing.bookingType === '仲介案内' ? existing.companyName : existing.staffName;
+      await recordOperationLog(session, {
+        targetType: 'internalBooking',
+        targetId: id,
+        action: '削除',
+        beforeValue: `${existing.bookingType}／${existing.propertyName}／${who}／${existing.date} ${formatTimeRange(existing.startTime, existing.endTime)}`,
+        afterValue: '（削除）',
+      });
+    }
     return Response.json({ success: true });
   } catch {
     return Response.json({ error: 'Internal booking not found' }, { status: 404 });

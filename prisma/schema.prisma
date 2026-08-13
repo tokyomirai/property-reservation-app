@@ -60,6 +60,10 @@ model Reservation {
   endTime       String   @default("")
   notes         String   @default("")
   status        String   @default("未承認")
+  // 最終処理者（承認/却下/日時変更/キャンセルを実行したログインユーザー）。過去データは空＝記録なし。
+  processedByName  String   @default("")
+  processedByEmail String   @default("")
+  processedAt      DateTime?
   // LINE WORKSカレンダーへ登録した予定のID（重複登録の防止・追跡用）
   calendarEventId String @default("")
   createdAt     DateTime @default(now())
@@ -94,9 +98,35 @@ model InternalBooking {
   status       String   @default("確定")
   // LINE WORKSカレンダーに登録した予定のID（日時変更・キャンセル時の同期用）
   calendarEventId String @default("")
+  // 登録者（この手動予約を登録したログインユーザー）
   createdBy    String   @default("")
+  createdByEmail String @default("")
+  // 最終処理者（日時変更/キャンセルを実行したログインユーザー）。過去データは空＝記録なし。
+  processedByName  String   @default("")
+  processedByEmail String   @default("")
+  processedAt      DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   @@index([propertyId, date])
+}
+
+/// 予約に対する操作の監査ログ。誰が・いつ・何を・変更前後を記録する。
+/// 既存予約は記録せず今後の操作分から蓄積する。予約削除後もログは残る（targetId は削除済みIDを指す）。
+model OperationLog {
+  id            String   @id @default(cuid())
+  // 対象種別: "reservation"（内見予約） | "internalBooking"（社内手動予約）
+  targetType    String
+  targetId      String
+  // 操作: 承認 / 却下 / 日時変更 / キャンセル / 削除 / 登録 / 確定 など
+  action        String
+  // 操作したログインユーザー（Google表示名。取得できなければ空）とメールアドレス
+  operatorName  String   @default("")
+  operatorEmail String   @default("")
+  // 変更前・変更後の内容（表示用テキスト。ステータス名や "19:00〜20:00" など）
+  beforeValue   String   @default("")
+  afterValue    String   @default("")
+  createdAt     DateTime @default(now())
+
+  @@index([targetType, targetId])
 }

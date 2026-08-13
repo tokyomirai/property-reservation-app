@@ -12,6 +12,7 @@ import {
   type CalendarCategory,
 } from './calendarTypes';
 import PropertyCombobox from './PropertyCombobox';
+import OperationHistoryModal from './OperationHistoryModal';
 import {
   isBeforeViewingStart,
   formatViewingMonthDayJp,
@@ -92,6 +93,8 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
   >(null);
   const [rescheduleError, setRescheduleError] = useState('');
   const [statusBusy, setStatusBusy] = useState(false);
+  // 操作履歴モーダルの対象
+  const [historyFor, setHistoryFor] = useState<CalendarEntry | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -534,8 +537,29 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
                     <td className="py-2.5 text-slate-400 font-medium align-top">ステータス</td>
                     <td className="py-2.5 text-slate-700 font-bold">{detail.status}</td>
                   </tr>
+                  {/* 手動予約の登録者（誰が登録したか）。過去データは記録なし。 */}
+                  {detail.kind === '社内案内予約' && (
+                    <tr>
+                      <td className="py-2.5 text-slate-400 font-medium align-top">登録者</td>
+                      <td className="py-2.5 text-slate-700 font-medium">
+                        {detail.createdByName || detail.createdByEmail || '記録なし'}
+                        <span className="text-slate-400 font-mono ml-2 text-[11px]">
+                          {new Date(detail.createdAt).toLocaleString('ja-JP')}
+                        </span>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
+            </div>
+
+            <div className="px-6 pb-4">
+              <button
+                onClick={() => setHistoryFor(detail)}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline underline-offset-2"
+              >
+                🕓 操作履歴を表示
+              </button>
             </div>
 
             <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex flex-wrap gap-2 shrink-0">
@@ -601,6 +625,16 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
             </div>
           </div>
         </div>
+      )}
+
+      {/* --- モーダル: 操作履歴 --- */}
+      {historyFor && (
+        <OperationHistoryModal
+          targetType={historyFor.kind === '内見予約' ? 'reservation' : 'internalBooking'}
+          targetId={historyFor.id}
+          title={`${historyFor.propertyName}／${historyFor.companyName} ${historyFor.personName}`}
+          onClose={() => setHistoryFor(null)}
+        />
       )}
 
       {/* --- モーダル: 内見予約の日時変更 --- */}

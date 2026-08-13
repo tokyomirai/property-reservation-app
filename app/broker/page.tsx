@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { normalizeViewingStartDate, formatViewingDateJp } from '../../utils/viewingWindow';
 
 interface Property {
   id: string;
@@ -10,6 +11,8 @@ interface Property {
   address: string;
   salesStatus: string;
   viewingStatus: string;
+  // 内見受付開始日（"YYYY-MM-DD"）。未設定は null。
+  viewingStartDate?: string | null;
   isPublished: boolean;
   hasSlippers: string;
   hasSignboard: string;
@@ -129,6 +132,7 @@ export default function BrokerPage() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredProperties.map((prop) => {
                 const isViewable = prop.viewingStatus === '内見可能' || prop.viewingStatus === 'リフォーム後の予約受付中';
+                const startDate = normalizeViewingStartDate(prop.viewingStartDate);
                 // 資料/動画/360°の3枠。URLが登録されている項目のみクリック可能。
                 const actions = [
                   { key: 'doc', label: '📄 詳細資料', href: prop.documentUrl || '' },
@@ -202,6 +206,13 @@ export default function BrokerPage() {
                         >
                           {prop.viewingStatus === '内見不可' ? '現在内見不可' : `現在内見不可（${prop.viewingStatus}）`}
                         </button>
+                      )}
+
+                      {/* 内見受付開始日：備考を読まなくても予約可能日が一目で分かるよう、ボタン付近に表示 */}
+                      {prop.isPublished && isViewable && startDate && (
+                        <p className="mt-2 text-[11px] font-bold text-orange-600 text-center">
+                          🗓 内見受付開始日：{formatViewingDateJp(startDate)}～
+                        </p>
                       )}
 
                       {/* 詳細資料 / ルームツアー動画 / 360°カメラ

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect, use, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -8,6 +8,12 @@ import {
   ALLOWED_CARD_LABEL,
   MAX_CARD_BYTES,
 } from '../../../../utils/businessCard';
+import {
+  normalizeViewingStartDate,
+  formatViewingDateJp,
+  isBeforeViewingStart,
+  viewingStartErrorMessage,
+} from '../../../../utils/viewingWindow';
 
 interface Property {
   id: string;
@@ -15,6 +21,8 @@ interface Property {
   address: string;
   salesStatus: string;
   viewingStatus: string;
+  // 内見受付開始日（"YYYY-MM-DD"）。未設定は null。
+  viewingStartDate?: string | null;
   isPublished: boolean;
   hasSlippers: string;
   hasSignboard: string;
@@ -52,6 +60,10 @@ export default function PropertyDetailPage({ params }: PageProps) {
   });
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  // 名刺（必須）未添付時のエラーと、該当欄へのスクロール／フォーカス用
+  const [cardError, setCardError] = useState('');
+  const cardSectionRef = useRef<HTMLDivElement>(null);
+  const cardInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch(`/api/properties/${id}`)
@@ -104,6 +116,7 @@ export default function PropertyDetailPage({ params }: PageProps) {
         cardData: base64,
       }));
       setFormError('');
+      setCardError('');
     } catch (err) {
       console.error(err);
       setFormError('名刺ファイルの読み込みに失敗しました。');
@@ -124,12 +137,27 @@ export default function PropertyDetailPage({ params }: PageProps) {
       return;
     }
 
+    // 内見受付開始日より前の希望日は受け付けない（サーバー側でも再検証する）。
+    if (isBeforeViewingStart(formData.preferredDate, property.viewingStartDate)) {
+      setFormError(viewingStartErrorMessage(property.viewingStartDate));
+      return;
+    }
+
+    // 名刺画像は必須。未添付なら送信せず、該当欄へスクロール＋フォーカスして案内する。
+    if (!formData.cardData) {
+      setCardError('名刺画像を添付してください。');
+      cardSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      cardInputRef.current?.focus();
+      return;
+    }
+
     if (formData.endTime <= formData.startTime) {
       setFormError('終了時間は開始時間より後の時刻をご指定ください。');
       return;
     }
 
     setFormError('');
+    setCardError('');
     setSubmitting(true);
 
     fetch('/api/reservations', {
@@ -194,6 +222,7 @@ export default function PropertyDetailPage({ params }: PageProps) {
   }
 
   const isViewable = property.viewingStatus === '内見可能' || property.viewingStatus === 'リフォーム後の予約受付中';
+  const startDate = normalizeViewingStartDate(property.viewingStartDate);
 
   return (
     <div className="flex-1 bg-slate-50 text-slate-800 p-4 sm:p-6 lg:p-8">
@@ -262,6 +291,14 @@ export default function PropertyDetailPage({ params }: PageProps) {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* 内見受付開始日の案内（備考を読まなくても予約可能日が分かるよう明示） */}
+              {startDate && (
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs sm:text-sm font-bold text-center leading-relaxed">
+                  {property.viewingStatus === 'リフォーム後の予約受付中'
+                    ? `🛠 リフォーム後の予約受付中のため、${formatViewingDateJp(startDate)}以降の内見予約を受け付けています。`
+                    : `🗓 内見受付開始日：${formatViewingDateJp(startDate)}～`}
+                </div>
+              )}
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">仲介業者名 <span className="text-rose-500">*</span></label>
@@ -324,9 +361,11 @@ export default function PropertyDetailPage({ params }: PageProps) {
                 />
               </div>
 
-              {/* 名刺のアップロード（JPG / PNG / PDF） */}
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">名刺（画像・PDF）</label>
+              {/* 名刺のアップロード（JPG / PNG / PDF）※必須 */}
+              <div ref={cardSectionRef} className="scroll-mt-24">
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                  名刺画像 <span className="text-rose-500">【必須】</span>
+                </label>
                 {formData.cardFileName ? (
                   <div className="flex items-center justify-between gap-3 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5">
                     <span className="text-xs text-emerald-800 font-bold truncate">
@@ -342,15 +381,21 @@ export default function PropertyDetailPage({ params }: PageProps) {
                   </div>
                 ) : (
                   <input
+                    ref={cardInputRef}
                     type="file"
                     accept="image/jpeg,image/png,application/pdf"
                     onChange={handleCardChange}
-                    className="w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-slate-250 file:bg-slate-100 file:text-slate-700 file:text-xs file:font-bold hover:file:bg-slate-200 file:cursor-pointer"
+                    className={`w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border file:bg-slate-100 file:text-slate-700 file:text-xs file:font-bold hover:file:bg-slate-200 file:cursor-pointer ${
+                      cardError ? 'file:border-rose-400' : 'file:border-slate-250'
+                    }`}
                   />
                 )}
                 <p className="text-[11px] text-slate-500 mt-1">
-                  {ALLOWED_CARD_LABEL} 形式・5MBまで。ご担当者様の名刺をアップロードしてください。
+                  {ALLOWED_CARD_LABEL} 形式・5MBまで。ご担当者様の名刺を必ずアップロードしてください。
                 </p>
+                {cardError && (
+                  <p className="mt-1.5 text-xs font-bold text-rose-600">⚠️ {cardError}</p>
+                )}
               </div>
 
               {/* 内見希望日 ＋ 開始/終了時間 */}
@@ -360,6 +405,7 @@ export default function PropertyDetailPage({ params }: PageProps) {
                   <input
                     type="date"
                     required
+                    min={startDate || undefined}
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-855 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                     value={formData.preferredDate}
                     onChange={e => setFormData({...formData, preferredDate: e.target.value})}

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import CalendarTab from './CalendarTab';
 import { COMPANY_NAME, COMPANY_PHONE, CANCEL_NOTICE_TITLE } from '../../utils/company';
 import { cardKindLabel } from '../../utils/businessCard';
+import { formatViewingSlash } from '../../utils/viewingWindow';
 
 interface Property {
   id: string;
@@ -11,6 +12,8 @@ interface Property {
   address: string;
   salesStatus: string;
   viewingStatus: string;
+  // 内見受付開始日（"YYYY-MM-DD"）。未設定は null。
+  viewingStartDate: string | null;
   isPublished: boolean;
   hasKeyBox: string;
   keyBoxNumber: string;
@@ -117,6 +120,7 @@ export default function AdminPage() {
     address: '',
     salesStatus: '販売中',
     viewingStatus: '内見可能',
+    viewingStartDate: '',
     isPublished: true,
     hasKeyBox: '',
     keyBoxNumber: '',
@@ -199,6 +203,7 @@ export default function AdminPage() {
         address: '',
         salesStatus: '販売中',
         viewingStatus: '内見可能',
+        viewingStartDate: '',
         isPublished: true,
         hasKeyBox: '',
         keyBoxNumber: '',
@@ -524,6 +529,11 @@ export default function AdminPage() {
                           }`}>
                             {(!prop.isPublished && prop.viewingStatus === '内見可能') ? '公開後内見可能' : prop.viewingStatus}
                           </span>
+                          {prop.viewingStartDate && (
+                            <div className="mt-1 text-[10px] font-bold text-orange-600 whitespace-nowrap">
+                              {formatViewingSlash(prop.viewingStartDate)}～予約可
+                            </div>
+                          )}
                         </td>
 
                         {/* 鍵管理 */}
@@ -772,8 +782,9 @@ export default function AdminPage() {
 
         {/* 3. 社内用 内見カレンダータブ */}
         {activeTab === 'calendar' && (
-          <CalendarTab properties={properties.map(p => ({ id: p.id, name: p.name, address: p.address }))} />
+          <CalendarTab properties={properties.map(p => ({ id: p.id, name: p.name, address: p.address, viewingStartDate: p.viewingStartDate }))} />
         )}
+
 
       </div>
 
@@ -858,6 +869,18 @@ export default function AdminPage() {
                     <option value="解体中">解体中</option>
                     <option value="内見不可">内見不可</option>
                   </select>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">内見受付開始日（任意）</label>
+                  <input
+                    type="date"
+                    className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                    value={newProp.viewingStartDate ?? ''}
+                    onChange={e => setNewProp({...newProp, viewingStartDate: e.target.value})}
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    設定すると、この日より前の内見予約を受け付けません（仲介画面でも選択不可）。未設定なら日付制限なし。
+                  </p>
                 </div>
               </div>
 
@@ -1130,6 +1153,18 @@ export default function AdminPage() {
                     <option value="解体中">解体中</option>
                     <option value="内見不可">内見不可</option>
                   </select>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">内見受付開始日（任意）</label>
+                  <input
+                    type="date"
+                    className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                    value={editingProperty.viewingStartDate ?? ''}
+                    onChange={e => setEditingProperty({...editingProperty, viewingStartDate: e.target.value})}
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    設定すると、この日より前の内見予約を受け付けません（仲介画面でも選択不可）。未設定なら日付制限なし。
+                  </p>
                 </div>
               </div>
 

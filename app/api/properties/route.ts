@@ -1,6 +1,7 @@
 import { prisma } from '../../../utils/db';
 import { getSession, unauthorized } from '../../../utils/session';
 import { validatePropertyLinks } from '../../../utils/propertyLinks';
+import { normalizeViewingStartDate } from '../../../utils/viewingWindow';
 import { type NextRequest } from 'next/server';
 
 // 公開側に返すフィールド（鍵情報・社内メモは除外）
@@ -10,6 +11,8 @@ const PUBLIC_SELECT = {
   address: true,
   salesStatus: true,
   viewingStatus: true,
+  // 内見受付開始日（公開画面での日付制御・案内表示に使用）
+  viewingStartDate: true,
   isPublished: true,
   notes: true,
   // 公開カードの資料/動画/パノラマ導線（公開用URL）
@@ -73,6 +76,8 @@ export async function POST(request: NextRequest) {
       address: body.address ?? '',
       salesStatus: body.salesStatus ?? '販売中',
       viewingStatus: body.viewingStatus ?? '内見可能',
+      // 空欄・不正値は NULL（＝日付制限なし）として保存する
+      viewingStartDate: normalizeViewingStartDate(body.viewingStartDate) || null,
       isPublished: body.isPublished ?? true,
       hasKeyBox: body.hasKeyBox ?? '',
       keyBoxNumber: body.keyBoxNumber ?? '',

@@ -12,6 +12,10 @@ import {
   type CalendarCategory,
 } from './calendarTypes';
 import PropertyCombobox from './PropertyCombobox';
+import {
+  isBeforeViewingStart,
+  formatViewingMonthDayJp,
+} from '../../utils/viewingWindow';
 
 // FullCalendar はブラウザAPIに依存するためSSRを無効にして読み込む
 const MonthCalendar = dynamic(() => import('./MonthCalendar'), {
@@ -27,6 +31,8 @@ interface PropertyOption {
   id: string;
   name: string;
   address: string;
+  // 内見受付開始日（"YYYY-MM-DD"）。未設定は null。社内手動予約では開始日前でも警告後に登録可。
+  viewingStartDate?: string | null;
 }
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
@@ -256,6 +262,15 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
     if (form.endTime <= form.startTime) {
       setError('終了時間は開始時間より後の時刻を指定してください。');
       return;
+    }
+
+    // 内見受付開始日より前の日程でも社内判断で登録できるが、確認を挟む（自社案内・仲介案内アプリ外の両方）。
+    const selected = properties.find((p) => p.id === form.propertyId);
+    if (selected && isBeforeViewingStart(form.date, selected.viewingStartDate)) {
+      const ok = window.confirm(
+        `この物件の内見受付開始日は${formatViewingMonthDayJp(selected.viewingStartDate)}です。この日程で登録しますか？`
+      );
+      if (!ok) return;
     }
 
     setError('');

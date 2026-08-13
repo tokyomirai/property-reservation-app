@@ -4,6 +4,7 @@ import { sendReservationEmail } from '../../../utils/mail';
 import { rateLimit, getClientIp } from '../../../utils/rateLimit';
 import { validateSlot, findConflicts, conflictMessage, formatTimeRange } from '../../../utils/schedule';
 import { validateCard } from '../../../utils/businessCard';
+import { isBeforeViewingStart, viewingStartErrorMessage } from '../../../utils/viewingWindow';
 import { type NextRequest } from 'next/server';
 
 // GET: 予約一覧（管理者のみ）
@@ -92,6 +93,12 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: '担当者携帯番号を入力してください。' }, { status: 400 });
   }
 
+  // 名刺画像は必須（公開の内見予約フォームのみ。社内からの手動予約 /api/internal-bookings は対象外）。
+  // 直接リクエストで名刺なしの予約が登録されないよう、サーバー側で必ず添付有無を確認する。
+  if (!fields.cardData || !fields.cardFileName || !fields.cardMimeType) {
+    return Response.json({ error: '名刺画像を添付してください。' }, { status: 400 });
+  }
+
   // 名刺（JPG / PNG / PDF）の形式・サイズ検証
   const cardError = validateCard(fields);
   if (cardError) {
@@ -142,6 +149,15 @@ export async function POST(request: NextRequest) {
     return Response.json(
       { error: 'この物件は現在非公開のため、内見予約を受け付けていません。' },
       { status: 403 }
+    );
+  }
+
+  // 内見受付開始日より前の希望日は受け付けない（画面だけでなくサーバー側でも拒否。直接リクエスト対策）。
+  // 受付開始日が未設定の物件は従来どおり日付制限なし。
+  if (isBeforeViewingStart(fields.preferredDate, property.viewingStartDate)) {
+    return Response.json(
+      { error: viewingStartErrorMessage(property.viewingStartDate) },
+      { status: 400 }
     );
   }
 

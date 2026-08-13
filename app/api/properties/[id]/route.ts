@@ -1,6 +1,7 @@
 import { prisma } from '../../../../utils/db';
 import { getSession, unauthorized } from '../../../../utils/session';
 import { validatePropertyLinks } from '../../../../utils/propertyLinks';
+import { normalizeViewingStartDate } from '../../../../utils/viewingWindow';
 import { type NextRequest } from 'next/server';
 
 // GET: 物件詳細取得（公開・管理者両用）
@@ -65,6 +66,8 @@ export async function PUT(
         address: body.address,
         salesStatus: body.salesStatus,
         viewingStatus: body.viewingStatus,
+        // 空欄・不正値は NULL（＝日付制限なし）として保存する
+        viewingStartDate: normalizeViewingStartDate(body.viewingStartDate) || null,
         isPublished: body.isPublished,
         hasKeyBox: body.hasKeyBox,
         keyBoxNumber: body.keyBoxNumber,

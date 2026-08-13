@@ -12,6 +12,8 @@ model Property {
   address          String            @default("")
   salesStatus      String            @default("販売中")
   viewingStatus    String            @default("内見可能")
+  // 内見受付開始日（"YYYY-MM-DD"）。未設定(NULL)なら従来どおり日付制限なし。既存物件へは自動設定しない。
+  viewingStartDate String?
   isPublished      Boolean           @default(true)
   hasKeyBox        String            @default("")
   keyBoxNumber     String            @default("")

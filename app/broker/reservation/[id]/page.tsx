@@ -74,7 +74,9 @@ export default function ReservationStatusPage({ params }: PageProps) {
     };
 
     loadData();
-    const interval = setInterval(loadData, 3000);
+    // 承認による鍵情報の開示を画面へ反映するための再取得。
+    // 3秒間隔だとタブを開いたままにされたときのDB転送量が過大になるため30秒とする。
+    const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
   }, [id]);
 

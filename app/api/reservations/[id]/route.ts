@@ -47,6 +47,9 @@ export async function GET(
 
   const reservation = await prisma.reservation.findUnique({
     where: { id },
+    // 名刺の実データはこのエンドポイントでは使わない。
+    // 予約照会ページから繰り返し呼ばれるため、ここで読むとDB転送量が跳ね上がる。
+    omit: { cardData: true },
     include: {
       property: {
         select: {
@@ -84,11 +87,9 @@ export async function GET(
     : null;
 
   // 名刺の実データはレスポンスに含めない（社内ログイン時のみ /card から取得できる）
-  const { cardData, ...rest } = reservation;
-
   return Response.json({
-    ...rest,
-    hasCard: cardData !== '',
+    ...reservation,
+    hasCard: reservation.cardFileName !== '',
     property: safeProperty,
     keyDisclosure,
   });
@@ -117,7 +118,11 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json();
 
-  const existing = await prisma.reservation.findUnique({ where: { id } });
+  // cardData は以降の処理で参照しないため読み出さない（転送量の削減）
+  const existing = await prisma.reservation.findUnique({
+    where: { id },
+    omit: { cardData: true },
+  });
   if (!existing) {
     return Response.json({ error: 'Reservation not found' }, { status: 404 });
   }
@@ -294,7 +299,10 @@ export async function DELETE(
 
   try {
     // 削除前に内容を控えて操作履歴を残す（レコード削除後もログは残る）
-    const existing = await prisma.reservation.findUnique({ where: { id } });
+    const existing = await prisma.reservation.findUnique({
+      where: { id },
+      omit: { cardData: true },
+    });
     await prisma.reservation.delete({ where: { id } });
     if (existing) {
       await recordOperationLog(session, {

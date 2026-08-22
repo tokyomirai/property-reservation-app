@@ -73,6 +73,8 @@ export async function GET(request: NextRequest) {
     prisma.reservation.findMany({
       where: range ? { preferredDate: range } : {},
       orderBy: [{ preferredDate: 'asc' }, { startTime: 'asc' }],
+      // 名刺の実データはカレンダーでは使わないため、DBから読み出さない（転送量の削減）
+      omit: { cardData: true },
     }),
     prisma.internalBooking.findMany({
       where: range ? { date: range } : {},
@@ -97,8 +99,8 @@ export async function GET(request: NextRequest) {
       email: r.email,
       cardFileName: r.cardFileName,
       cardMimeType: r.cardMimeType,
-      // 名刺の実データは返さない（/api/reservations/[id]/card から取得する）
-      hasCard: r.cardData !== '',
+      // 名刺の実データはDBから読まない（/api/reservations/[id]/card から取得する）
+      hasCard: r.cardFileName !== '',
       notes: r.notes,
       status: r.status,
       createdAt: r.createdAt.toISOString(),

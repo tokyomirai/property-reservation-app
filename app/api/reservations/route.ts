@@ -14,12 +14,16 @@ export async function GET(request: NextRequest) {
 
   const reservations = await prisma.reservation.findMany({
     orderBy: { createdAt: 'desc' },
+    // 名刺の実データ（Base64・最大約6.7MB/件）はDBから読み出さない。
+    // レスポンスから除くだけでは、DB→アプリの転送量として課金され続けるため、
+    // SELECT の時点で除外する。
+    omit: { cardData: true },
     include: { property: { select: { name: true } } },
   });
-  // 名刺の実データは一覧では返さず、添付の有無のみを返す（レスポンス肥大の防止）。
-  // 実データは /api/reservations/[id]/card から取得する。
+  // 一覧では添付の有無のみを返す。実データは /api/reservations/[id]/card から取得する。
+  // 有無は cardFileName で判定する（申込時に名刺の3項目は必ず揃って保存されるため）。
   return Response.json(
-    reservations.map(({ cardData, ...rest }) => ({ ...rest, hasCard: cardData !== '' }))
+    reservations.map((r) => ({ ...r, hasCard: r.cardFileName !== '' }))
   );
 }
 

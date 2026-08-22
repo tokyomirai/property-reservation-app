@@ -49,8 +49,10 @@ export async function GET(request: NextRequest) {
       });
       return Response.json(properties);
     }
-  } catch (error: any) {
-    return Response.json({ error: String(error), stack: error.stack }, { status: 500 });
+  } catch (error) {
+    // 内部情報（スタックトレース）は外部に返さず、サーバーログにのみ残す
+    console.error('GET /api/properties failed:', error);
+    return Response.json({ error: 'データの取得に失敗しました。' }, { status: 500 });
   }
 }
 

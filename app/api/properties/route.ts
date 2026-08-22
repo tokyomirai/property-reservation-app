@@ -29,24 +29,28 @@ const PUBLIC_SELECT = {
 export async function GET(request: NextRequest) {
   const session = await getSession();
 
-  if (session) {
-    // 管理者: 全フィールド・全物件
-    const properties = await prisma.property.findMany({
-      orderBy: { createdAt: 'asc' },
-    });
-    return Response.json(properties);
-  } else {
-    // 公開: isPublished=true のみ、安全なフィールドのみ。
-    // 「仕入決済前」（契約済だが決済前で公開・販売不可）は公開一覧に出さない。
-    const properties = await prisma.property.findMany({
-      where: {
-        isPublished: true,
-        salesStatus: { not: '仕入決済前' },
-      },
-      select: PUBLIC_SELECT,
-      orderBy: { createdAt: 'asc' },
-    });
-    return Response.json(properties);
+  try {
+    if (session) {
+      // 管理者: 全フィールド・全物件
+      const properties = await prisma.property.findMany({
+        orderBy: { createdAt: 'asc' },
+      });
+      return Response.json(properties);
+    } else {
+      // 公開: isPublished=true のみ、安全なフィールドのみ。
+      // 「仕入決済前」（契約済だが決済前で公開・販売不可）は公開一覧に出さない。
+      const properties = await prisma.property.findMany({
+        where: {
+          isPublished: true,
+          salesStatus: { not: '仕入決済前' },
+        },
+        select: PUBLIC_SELECT,
+        orderBy: { createdAt: 'asc' },
+      });
+      return Response.json(properties);
+    }
+  } catch (error: any) {
+    return Response.json({ error: String(error), stack: error.stack }, { status: 500 });
   }
 }
 

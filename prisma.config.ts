@@ -11,6 +11,5 @@ export default defineConfig({
   schema: path.join(__dirname, "prisma", "schema.prisma"),
   datasource: {
     url: process.env.DATABASE_URL ?? "postgresql://localhost:5432/mock",
-    directUrl: process.env.DATABASE_URL_UNPOOLED,
   },
 });

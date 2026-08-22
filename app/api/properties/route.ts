@@ -36,15 +36,12 @@ export async function GET(request: NextRequest) {
     });
     return Response.json(properties);
   } else {
-    // 公開: isPublished=true のみ、安全なフィールドのみ、かつ予約受付中のステータス（内見可能、リフォーム後の予約受付中）のみ。
+    // 公開: isPublished=true のみ、安全なフィールドのみ。
     // 「仕入決済前」（契約済だが決済前で公開・販売不可）は公開一覧に出さない。
     const properties = await prisma.property.findMany({
       where: {
         isPublished: true,
         salesStatus: { not: '仕入決済前' },
-        viewingStatus: {
-          in: ['内見可能', 'リフォーム後の予約受付中'],
-        },
       },
       select: PUBLIC_SELECT,
       orderBy: { createdAt: 'asc' },

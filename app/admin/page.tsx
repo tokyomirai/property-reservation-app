@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import CalendarTab from './CalendarTab';
 import OperationHistoryModal from './OperationHistoryModal';
+import StickyHScroll from './StickyHScroll';
 import { COMPANY_NAME, COMPANY_PHONE, CANCEL_NOTICE_TITLE } from '../../utils/company';
 import { cardKindLabel } from '../../utils/businessCard';
 import { formatViewingSlash } from '../../utils/viewingWindow';
@@ -653,7 +654,8 @@ export default function AdminPage() {
         {/* 2. 内見予約承認待ちタブ */}
         {activeTab === 'reservations' && (
           <div className="bg-white border border-slate-200 rounded-b-xl overflow-hidden shadow-md">
-            <div className="overflow-x-auto">
+            {/* 横スクロールバーを画面下端に追従表示（一覧の途中でも横移動できる） */}
+            <StickyHScroll className="overflow-x-auto">
               <table className="min-w-full divide-y divide-slate-200 text-left">
                 <thead className="bg-slate-50 text-slate-505 text-xs font-bold uppercase tracking-wider">
                   <tr>
@@ -807,7 +809,7 @@ export default function AdminPage() {
                   )}
                 </tbody>
               </table>
-            </div>
+            </StickyHScroll>
           </div>
         )}
 

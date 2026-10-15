@@ -13,6 +13,7 @@ interface AssignedProperty {
   setupLocation: string;
   unlockCode: string;
   hasSlippers: string;
+  hasSignboard: string;
   notes: string;
   lastUpdatedBy: string;
   updatedAt: string;
@@ -63,6 +64,13 @@ const STATE_STYLE: Record<KbState, string> = {
 };
 
 type FilterKey = 'すべて' | '社内在庫' | '物件使用中' | '回収待ち' | '重複使用' | '番号なし' | '他社所有';
+
+/** スリッパ・売り看板の有無表示（あり/なし/未設定）。 */
+function equipView(v: string): { label: string; cls: string } {
+  if (v === 'あり') return { label: 'あり', cls: 'text-emerald-700 font-bold' };
+  if (v === 'なし') return { label: 'なし', cls: 'text-slate-500' };
+  return { label: '未設定', cls: 'text-amber-700 font-bold' };
+}
 
 function fmtDate(iso: string): string {
   if (!iso) return '';
@@ -434,59 +442,66 @@ export default function KeyBoxTab() {
         )}
       </div>
 
-      {/* 一覧（この領域だけ縦スクロール。ヘッダーは sticky で固定） */}
+      {/* 一覧：この領域だけ縦横スクロール。ヘッダーは縦sticky（横スクロール時はデータと一緒に動く）。
+          列には最小幅を設定し、半画面でも物件名／住所が1文字ずつ折り返さないようにする。 */}
       <div ref={tableScrollRef} className="overflow-auto border-t border-slate-200" style={{ maxHeight: tableMaxH }}>
-        <table className="min-w-full divide-y divide-slate-200 text-left">
+        <table className="w-full min-w-[1080px] divide-y divide-slate-200 text-left">
           <thead className="bg-slate-50 text-slate-505 text-xs font-bold uppercase tracking-wider sticky top-0 z-10 shadow-sm [&>tr>th]:bg-slate-50">
             <tr>
-              <th className="px-5 py-3">KB番号</th>
-              <th className="px-4 py-3">状態</th>
-              <th className="px-4 py-3">物件名 / 住所</th>
-              <th className="px-4 py-3">保管場所</th>
-              <th className="px-4 py-3">解除番号</th>
-              <th className="px-4 py-3">スリッパ</th>
-              <th className="px-4 py-3">最終更新</th>
-              <th className="px-4 py-3">備考</th>
+              <th className="px-5 py-3 min-w-[110px] whitespace-nowrap">KB番号</th>
+              <th className="px-4 py-3 min-w-[90px] whitespace-nowrap">状態</th>
+              <th className="px-4 py-3 min-w-[240px] whitespace-nowrap">物件名 / 住所</th>
+              <th className="px-4 py-3 min-w-[120px] whitespace-nowrap">保管場所</th>
+              <th className="px-4 py-3 min-w-[90px] whitespace-nowrap">解除番号</th>
+              <th className="px-4 py-3 min-w-[80px] whitespace-nowrap">スリッパ</th>
+              <th className="px-4 py-3 min-w-[90px] whitespace-nowrap">売り看板</th>
+              <th className="px-4 py-3 min-w-[110px] whitespace-nowrap">最終更新</th>
+              <th className="px-4 py-3 min-w-[160px] whitespace-nowrap">備考</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-sm">
             {[...normalVisible, ...unregisteredVisible].length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-5 py-12 text-center text-slate-400">
+                <td colSpan={9} className="px-5 py-12 text-center text-slate-400">
                   該当するキーボックスがありません。
                 </td>
               </tr>
             ) : (
-              [...normalVisible, ...unregisteredVisible].map((r) => {
+              [...normalVisible, ...unregisteredVisible].map((r, idx) => {
                 const dup = r.properties.length > 1;
+                const noNumber = r.state === '番号なし';
                 return (
-                  <tr key={r.number} className={dup || r.state === '未登録番号' ? 'bg-rose-500/[0.03]' : 'hover:bg-slate-50/50'}>
-                    <td className="px-5 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono font-extrabold text-slate-800">№{r.number}</span>
-                        <button
-                          onClick={() => openNumberHistory(r.number)}
-                          title="このキーボックスの使用履歴"
-                          className="text-[10px] px-1.5 py-0.5 rounded border border-slate-250 text-slate-500 hover:bg-slate-100 font-bold"
-                        >
-                          🕓履歴
-                        </button>
-                      </div>
+                  <tr key={`${r.state}:${r.number}:${r.properties[0]?.id ?? idx}`} className={dup || r.state === '未登録番号' ? 'bg-rose-500/[0.03]' : 'hover:bg-slate-50/50'}>
+                    <td className="px-5 py-4 whitespace-nowrap min-w-[110px]">
+                      {noNumber ? (
+                        <span className="text-xs font-bold text-slate-400">番号なし</span>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-extrabold text-slate-800">№{r.number}</span>
+                          <button
+                            onClick={() => openNumberHistory(r.number)}
+                            title="このキーボックスの使用履歴"
+                            className="text-[10px] px-1.5 py-0.5 rounded border border-slate-250 text-slate-500 hover:bg-slate-100 font-bold"
+                          >
+                            🕓履歴
+                          </button>
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
                       <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${STATE_STYLE[r.state]}`}>
                         {r.state}
                       </span>
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-4 min-w-[240px]">
                       {r.properties.length === 0 ? (
                         <span className="text-slate-400">（割当なし）</span>
                       ) : (
                         <div className="space-y-1.5">
                           {r.properties.map((p) => (
                             <div key={p.id}>
-                              <div className="font-bold text-slate-800">{p.name}</div>
-                              <div className="text-xs text-slate-500">📍 {p.address}</div>
+                              <div className="font-bold text-slate-800 break-words">{p.name}</div>
+                              <div className="text-xs text-slate-500 break-words">📍 {p.address}</div>
                             </div>
                           ))}
                           {r.warning && (
@@ -495,7 +510,7 @@ export default function KeyBoxTab() {
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-4 text-slate-700">
+                    <td className="px-4 py-4 text-slate-700 min-w-[120px]">
                       {r.state === '社内在庫' ? (
                         <div className="flex items-center gap-1.5 whitespace-nowrap">
                           <span className={r.storageLocation ? 'font-bold text-sky-700' : 'text-amber-700 font-bold'}>
@@ -516,17 +531,23 @@ export default function KeyBoxTab() {
                         ))
                       ) : '—'}
                     </td>
-                    <td className="px-4 py-4 font-mono text-slate-700">
+                    <td className="px-4 py-4 font-mono text-slate-700 whitespace-nowrap">
                       {r.properties.map((p, i) => (
                         <div key={i} className="min-h-[1.25rem]">{p.unlockCode || '—'}</div>
                       ))}
                       {r.properties.length === 0 && '—'}
                     </td>
-                    <td className="px-4 py-4 text-slate-600">
-                      {r.properties.map((p, i) => (
-                        <div key={i} className="min-h-[1.25rem]">{p.hasSlippers || '—'}</div>
-                      ))}
-                      {r.properties.length === 0 && '—'}
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      {r.properties.length === 0 ? '—' : r.properties.map((p, i) => {
+                        const e = equipView(p.hasSlippers);
+                        return <div key={i} className={`min-h-[1.25rem] ${e.cls}`}>{e.label}</div>;
+                      })}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      {r.properties.length === 0 ? '—' : r.properties.map((p, i) => {
+                        const e = equipView(p.hasSignboard);
+                        return <div key={i} className={`min-h-[1.25rem] ${e.cls}`}>{e.label}</div>;
+                      })}
                     </td>
                     <td className="px-4 py-4 text-xs text-slate-500 whitespace-nowrap">
                       {r.properties.map((p, i) => (
@@ -537,8 +558,8 @@ export default function KeyBoxTab() {
                       ))}
                       {r.properties.length === 0 && '—'}
                     </td>
-                    <td className="px-4 py-4 text-xs text-slate-500 max-w-[200px]">
-                      {/* 使用中は物件備考、社内在庫はマスタ備考 */}
+                    <td className="px-4 py-4 text-xs text-slate-500 min-w-[160px] max-w-[220px]">
+                      {/* 使用中は物件備考、社内在庫はマスタ備考（売り看板は専用列で表示・ここには出さない） */}
                       {r.properties.length > 0
                         ? r.properties.map((p, i) => <div key={i} className="truncate">{p.notes || '—'}</div>)
                         : (r.kbNotes || '—')}

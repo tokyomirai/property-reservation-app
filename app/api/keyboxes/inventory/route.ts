@@ -16,6 +16,7 @@ interface AssignedProperty {
   setupLocation: string; // 保管場所
   unlockCode: string;    // 解除番号
   hasSlippers: string;   // スリッパ有無
+  hasSignboard: string;  // 売り看板有無
   notes: string;         // 物件備考
   lastUpdatedBy: string;
   updatedAt: string;
@@ -44,7 +45,7 @@ export async function GET() {
       where: { soldAt: null },
       select: {
         id: true, name: true, address: true, keyBoxNumber: true,
-        setupLocation: true, unlockCode: true, hasSlippers: true,
+        setupLocation: true, unlockCode: true, hasSlippers: true, hasSignboard: true,
         notes: true, lastUpdatedBy: true, updatedAt: true,
       },
       orderBy: { createdAt: 'asc' },
@@ -68,6 +69,7 @@ export async function GET() {
       setupLocation: rec.setupLocation,
       unlockCode: rec.unlockCode,
       hasSlippers: '',
+      hasSignboard: '',
       notes: rec.notes,
       lastUpdatedBy: rec.requestedBy,
       updatedAt: rec.requestedAt.toISOString(),
@@ -77,7 +79,7 @@ export async function GET() {
 
   const toAssigned = (p: (typeof properties)[number]): AssignedProperty => ({
     id: p.id, name: p.name, address: p.address,
-    setupLocation: p.setupLocation, unlockCode: p.unlockCode, hasSlippers: p.hasSlippers,
+    setupLocation: p.setupLocation, unlockCode: p.unlockCode, hasSlippers: p.hasSlippers, hasSignboard: p.hasSignboard,
     notes: p.notes, lastUpdatedBy: p.lastUpdatedBy, updatedAt: p.updatedAt.toISOString(),
   });
 
@@ -177,8 +179,9 @@ export async function GET() {
 
   // 4) 番号なし(00)・他社所有(金) も一覧に表示（集計タイルのクリック絞り込み対象）。
   //    番号が共通のため、それぞれ1行に該当物件をまとめる（集計件数＝物件数と一致）。
-  if (none00Props.length > 0) {
-    rows.push({ number: '00', state: '番号なし', inMaster: false, isActive: false, kbNotes: '', storageLocation: '', properties: none00Props });
+  // 番号なし(00)は「管理番号」ではなく未設定を意味するため、物件ごとに1行ずつ表示する（まとめない）。
+  for (const prop of none00Props) {
+    rows.push({ number: '00', state: '番号なし', inMaster: false, isActive: false, kbNotes: '', storageLocation: '', properties: [prop] });
   }
   if (kinProps.length > 0) {
     rows.push({ number: '金', state: '他社所有', inMaster: false, isActive: false, kbNotes: '', storageLocation: '', properties: kinProps });

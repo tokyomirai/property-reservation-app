@@ -10,7 +10,7 @@ export function normalizeKb(value: string | null | undefined): string {
 
 export interface KeyBoxHistoryInput {
   keyBoxNumber: string;
-  action: '設置' | '変更' | '解除' | '回収';
+  action: '設置' | '変更' | '解除' | '回収' | '返却';
   propertyId?: string;
   propertyName?: string;
   setupLocation?: string;
@@ -20,11 +20,11 @@ export interface KeyBoxHistoryInput {
 
 /**
  * キーボックス使用履歴を1件記録する（append-only）。失敗しても本体処理は止めない。
- * 当社番号（00・金・空を除く）以外は記録しない。
+ * 番号なし（空・00）は記録しない。当社番号に加え、他社所有（金）の返却なども記録対象とする。
  */
 export async function recordKeyBoxHistory(input: KeyBoxHistoryInput): Promise<void> {
   const number = normalizeKb(input.keyBoxNumber);
-  if (!isCompanyKb(number)) return;
+  if (isNoneNumber(number)) return;
   try {
     await prisma.keyBoxHistory.create({
       data: {

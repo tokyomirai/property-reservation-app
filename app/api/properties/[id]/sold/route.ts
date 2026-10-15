@@ -1,6 +1,6 @@
 import { prisma } from '../../../../../utils/db';
 import { getSession, unauthorized } from '../../../../../utils/session';
-import { normalizeKb, isCompanyKb } from '../../../../../utils/keybox';
+import { normalizeKb, isNoneNumber, isKinNumber, recordKeyBoxHistory } from '../../../../../utils/keybox';
 import { type NextRequest } from 'next/server';
 
 // 物件を「売却済み」にする／解除する（社内のみ）。物理削除はしない。
@@ -33,45 +33,63 @@ export async function POST(
   }
 
   const kbNumber = normalizeKb(property.keyBoxNumber);
-  const hasCompanyKb = property.hasKeyBox === 'あり' && isCompanyKb(kbNumber);
+  // キーボックスが設置されていれば、当社/他社(金)に関わらず確認対象にする（番号なし=空/00のみ対象外）。
+  const hasKb = property.hasKeyBox === 'あり' && !isNoneNumber(kbNumber);
+  const kbOwnership = isKinNumber(kbNumber) ? '他社' : '自社';
 
-  // この物件に登録されている備品（＝回収確認の対象）だけを列挙する
-  const items: { itemType: string; keyBoxNumber: string; setupLocation: string; unlockCode: string }[] = [];
-  if (hasCompanyKb) items.push({ itemType: 'キーボックス', keyBoxNumber: kbNumber, setupLocation: property.setupLocation, unlockCode: property.unlockCode });
-  if (property.hasSlippers === 'あり') items.push({ itemType: 'スリッパ', keyBoxNumber: '', setupLocation: '', unlockCode: '' });
-  if (property.hasSignboard === 'あり') items.push({ itemType: '売り看板', keyBoxNumber: '', setupLocation: '', unlockCode: '' });
+  // この物件に登録されている備品（＝確認対象）を列挙する
+  const items: { itemType: string; ownership: string; keyBoxNumber: string; setupLocation: string; unlockCode: string }[] = [];
+  if (hasKb) items.push({ itemType: 'キーボックス', ownership: kbOwnership, keyBoxNumber: kbNumber, setupLocation: property.setupLocation, unlockCode: property.unlockCode });
+  if (property.hasSlippers === 'あり') items.push({ itemType: 'スリッパ', ownership: '自社', keyBoxNumber: '', setupLocation: '', unlockCode: '' });
+  if (property.hasSignboard === 'あり') items.push({ itemType: '売り看板', ownership: '自社', keyBoxNumber: '', setupLocation: '', unlockCode: '' });
 
-  // 登録備品は必ず回収状況（true/false）が指定されていること（未選択は不可）
+  // 登録備品は必ず回収/返却状況（true/false）が指定されていること（未選択は不可）
   for (const it of items) {
     if (typeof choices[it.itemType] !== 'boolean') {
-      return Response.json({ error: `「${it.itemType}」の回収状況を選択してください。` }, { status: 400 });
+      return Response.json({ error: `「${it.itemType}」の状況を選択してください。` }, { status: 400 });
     }
   }
 
-  // 備品ごとに回収記録を作成（回収済み＝日時/回収者/戻し先を記録、未回収＝回収待ちで残す）
+  // 備品ごとに記録を作成。
+  //   自社KB: 回収済み/回収待ち（回収済みは保管場所＋社内在庫へ）／他社KB(金): 返却済み/返却待ち（在庫に戻さない・保管場所なし）
   for (const it of items) {
-    const recovered = choices[it.itemType] === true;
-    // 回収済みキーボックスの戻し先は画面で指定した保管場所（未指定は4F）。社内在庫マスタの現在地も更新する。
-    const recoveredLocation = recovered && it.itemType === 'キーボックス' ? keyboxLocation : '';
+    const done = choices[it.itemType] === true;
+    const isOtherKb = it.itemType === 'キーボックス' && it.ownership === '他社';
+    const status = isOtherKb ? (done ? '返却済み' : '返却待ち') : (done ? '回収済み' : '回収待ち');
+    const recoveredLocation = done && it.itemType === 'キーボックス' && it.ownership === '自社' ? keyboxLocation : '';
     await prisma.keyBoxRecovery.create({
       data: {
         itemType: it.itemType,
+        ownership: it.ownership,
         keyBoxNumber: it.keyBoxNumber,
         propertyId: property.id,
         propertyName: property.name,
         propertyAddress: property.address,
         setupLocation: it.setupLocation,
         unlockCode: it.unlockCode,
-        status: recovered ? '回収済み' : '回収待ち',
+        status,
         requestedBy: session.name,
-        recoveredBy: recovered ? session.name : '',
-        recoveredAt: recovered ? new Date() : null,
+        recoveredBy: done ? session.name : '',
+        recoveredAt: done ? new Date() : null,
         recoveredLocation,
         notes: '',
       },
     });
-    if (recovered && it.itemType === 'キーボックス') {
-      await prisma.keyBox.updateMany({ where: { number: it.keyBoxNumber }, data: { storageLocation: keyboxLocation } });
+    if (done && it.itemType === 'キーボックス') {
+      if (it.ownership === '自社') {
+        // 自社KBは指定の保管場所で社内在庫へ戻す
+        await prisma.keyBox.updateMany({ where: { number: it.keyBoxNumber }, data: { storageLocation: keyboxLocation } });
+      }
+      // 履歴（自社=回収／他社=返却）
+      await recordKeyBoxHistory({
+        keyBoxNumber: it.keyBoxNumber,
+        action: it.ownership === '他社' ? '返却' : '回収',
+        propertyId: property.id,
+        propertyName: property.name,
+        setupLocation: it.ownership === '自社' ? keyboxLocation : '',
+        unlockCode: it.unlockCode,
+        operator: session.name,
+      });
     }
   }
 

@@ -7,7 +7,7 @@ import { normalizeKb, isNoneNumber, isKinNumber, isCompanyKb } from '../../../..
 // 各番号が今どこに割り当てられているか（社内在庫/物件使用中/重複使用/未登録番号）を返す。
 // 現地確認・棚卸履歴は扱わない。既存データ（物件・マスタ）を参照するのみ。
 
-export type KbState = '社内在庫' | '物件使用中' | '重複使用' | '未登録番号' | '回収待ち';
+export type KbState = '社内在庫' | '物件使用中' | '重複使用' | '未登録番号' | '回収待ち' | '番号なし' | '他社所有';
 
 interface AssignedProperty {
   id: string;
@@ -85,6 +85,8 @@ export async function GET() {
   const usage = new Map<string, AssignedProperty[]>();
   let none00 = 0; // 番号なし（00・未入力）
   let kin = 0;    // 他社所有（金）
+  const none00Props: AssignedProperty[] = []; // 番号なし(00)の物件（一覧表示用）
+  const kinProps: AssignedProperty[] = [];    // 他社所有(金)の物件（一覧表示用）
   const excluded: { none00: { name: string; address: string }[]; kin: { name: string; address: string }[] } = {
     none00: [], kin: [],
   };
@@ -93,6 +95,7 @@ export async function GET() {
     const n = normalizeKb(p.keyBoxNumber);
     if (isKinNumber(n)) {
       kin++;
+      kinProps.push(toAssigned(p));
       excluded.kin.push({ name: p.name, address: p.address });
       continue;
     }
@@ -100,6 +103,7 @@ export async function GET() {
       // "00" のみを番号なしとして計上（未入力の空は在庫照合の対象外・件数にも含めない）
       if (n === '00') {
         none00++;
+        none00Props.push(toAssigned(p));
         excluded.none00.push({ name: p.name, address: p.address });
       }
       continue;
@@ -169,6 +173,15 @@ export async function GET() {
       kbNotes: m?.notes ?? '', storageLocation: m?.storageLocation ?? '', properties: pending,
       warning: '売却済み物件から未回収です。回収完了まで社内在庫に戻しません',
     });
+  }
+
+  // 4) 番号なし(00)・他社所有(金) も一覧に表示（集計タイルのクリック絞り込み対象）。
+  //    番号が共通のため、それぞれ1行に該当物件をまとめる（集計件数＝物件数と一致）。
+  if (none00Props.length > 0) {
+    rows.push({ number: '00', state: '番号なし', inMaster: false, isActive: false, kbNotes: '', storageLocation: '', properties: none00Props });
+  }
+  if (kinProps.length > 0) {
+    rows.push({ number: '金', state: '他社所有', inMaster: false, isActive: false, kbNotes: '', storageLocation: '', properties: kinProps });
   }
 
   // 並び順: 番号を数値優先で昇順（先頭ゼロは表示上は保持）

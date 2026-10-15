@@ -321,11 +321,14 @@ export default function AdminPage() {
   const soldItems = (p: Property): string[] => {
     const n = (p.keyBoxNumber ?? '').trim();
     const items: string[] = [];
-    if (p.hasKeyBox === 'あり' && n !== '' && n !== '00' && n !== '金') items.push('キーボックス');
+    // キーボックスが設置されていれば自社・他社(金)に関わらず確認対象（番号なし=空/00のみ除外）
+    if (p.hasKeyBox === 'あり' && n !== '' && n !== '00') items.push('キーボックス');
     if (p.hasSlippers === 'あり') items.push('スリッパ');
     if (p.hasSignboard === 'あり') items.push('売り看板');
     return items;
   };
+  /** 売却対象物件のキーボックスが他社所有（金）か */
+  const soldKbIsOther = (p: Property): boolean => (p.keyBoxNumber ?? '').trim() === '金';
   const confirmSold = async () => {
     if (!sellingProperty || soldBusy) return;
     setSoldBusy(true);
@@ -1611,8 +1614,12 @@ export default function AdminPage() {
                     </div>
                   );
                 }
+                const isOtherKb = soldKbIsOther(sellingProperty);
                 const labelOf = (it: string) =>
-                  it === 'キーボックス' ? `🔑 キーボックス №${sellingProperty.keyBoxNumber}` : it === 'スリッパ' ? '🥿 スリッパ' : '🪧 売り看板';
+                  it === 'キーボックス' ? `🔑 キーボックス №${sellingProperty.keyBoxNumber}${isOtherKb ? '（他社）' : ''}` : it === 'スリッパ' ? '🥿 スリッパ' : '🪧 売り看板';
+                // キーボックスが他社(金)なら「返却済み/未返却」、それ以外は「回収済み/未回収」
+                const doneLabel = (it: string) => (it === 'キーボックス' && isOtherKb ? '返却済み' : '回収済み');
+                const pendingLabel = (it: string) => (it === 'キーボックス' && isOtherKb ? '未返却' : '未回収');
                 return (
                   <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 p-3 space-y-2.5">
                     <p className="text-sm font-bold text-slate-800">登録備品の回収状況を選択してください</p>
@@ -1623,16 +1630,16 @@ export default function AdminPage() {
                           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 shrink-0">
                             <button type="button" onClick={() => setSoldChoices((c) => ({ ...c, [it]: true }))}
                               className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors ${soldChoices[it] === true ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                              回収済み
+                              {doneLabel(it)}
                             </button>
                             <button type="button" onClick={() => setSoldChoices((c) => ({ ...c, [it]: false }))}
                               className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors ${soldChoices[it] === false ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                              未回収
+                              {pendingLabel(it)}
                             </button>
                           </div>
                         </div>
-                        {/* キーボックスを回収済みにした場合のみ、直下に社内保管場所を入力（4F初期／その他は自由入力） */}
-                        {it === 'キーボックス' && soldChoices[it] === true && (
+                        {/* 自社キーボックスを回収済みにした場合のみ、直下に社内保管場所（4F初期／その他は自由入力）。他社は不要 */}
+                        {it === 'キーボックス' && !isOtherKb && soldChoices[it] === true && (
                           <div className="mt-2 pt-2 border-t border-slate-100">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-[11px] font-bold text-slate-500">社内保管場所</span>
@@ -1659,7 +1666,7 @@ export default function AdminPage() {
                       </div>
                     ))}
                     <p className="text-[11px] text-slate-500">
-                      「回収済み」は回収日・回収者・保管場所を記録（キーボックスは指定の場所で社内在庫に戻します）。「未回収」は回収待ち一覧に残ります。
+                      回収済み/返却済みは日時・担当者を記録（自社キーボックスは指定の保管場所で社内在庫へ／他社=金は返却記録のみで在庫に戻しません）。未回収/未返却は回収・返却待ちに残ります。
                     </p>
                   </div>
                 );
@@ -1674,7 +1681,7 @@ export default function AdminPage() {
                 disabled={
                   soldBusy
                   || soldItems(sellingProperty).some((it) => typeof soldChoices[it] !== 'boolean')
-                  || (soldChoices['キーボックス'] === true && soldKbLoc === 'その他' && !soldKbLocText.trim())
+                  || (soldChoices['キーボックス'] === true && !soldKbIsOther(sellingProperty) && soldKbLoc === 'その他' && !soldKbLocText.trim())
                 }
                 className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
               >

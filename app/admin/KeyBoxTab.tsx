@@ -17,7 +17,7 @@ interface AssignedProperty {
   lastUpdatedBy: string;
   updatedAt: string;
 }
-type KbState = '社内在庫' | '物件使用中' | '重複使用' | '未登録番号' | '回収待ち';
+type KbState = '社内在庫' | '物件使用中' | '重複使用' | '未登録番号' | '回収待ち' | '番号なし' | '他社所有';
 interface KbRow {
   number: string;
   state: KbState;
@@ -34,7 +34,7 @@ interface Aggregates {
   unregistered: number; none00: number; kin: number;
 }
 interface Recovery {
-  id: string; itemType: string; keyBoxNumber: string; propertyName: string; propertyAddress: string;
+  id: string; itemType: string; ownership?: string; keyBoxNumber: string; propertyName: string; propertyAddress: string;
   setupLocation: string; unlockCode: string; status: string;
   requestedBy: string; requestedAt: string; recoveredBy: string; recoveredAt: string | null;
   recoveredLocation?: string;
@@ -58,9 +58,11 @@ const STATE_STYLE: Record<KbState, string> = {
   回収待ち: 'bg-amber-50 text-amber-800 border-amber-300',
   重複使用: 'bg-rose-50 text-rose-700 border-rose-200',
   未登録番号: 'bg-orange-100 text-orange-800 border-orange-300',
+  番号なし: 'bg-slate-100 text-slate-500 border-slate-200',
+  他社所有: 'bg-slate-100 text-slate-600 border-slate-200',
 };
 
-type FilterKey = 'すべて' | '社内在庫' | '物件使用中' | '重複使用';
+type FilterKey = 'すべて' | '社内在庫' | '物件使用中' | '回収待ち' | '重複使用' | '番号なし' | '他社所有';
 
 function fmtDate(iso: string): string {
   if (!iso) return '';
@@ -116,13 +118,18 @@ function LocationModal({
   );
 }
 
-/** 集計タイル。 */
-function Stat({ label, value, tone }: { label: string; value: number; tone: string }) {
+/** 集計タイル。クリックで一覧を絞り込む（選択中は紫の枠）。サイズ・配置は従来どおり。 */
+function Stat({ label, value, tone, active, onClick }: { label: string; value: number; tone: string; active?: boolean; onClick?: () => void }) {
   return (
-    <div className={`rounded-lg border px-3 py-2.5 ${tone}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`text-left w-full rounded-lg border px-3 py-2.5 transition ${tone} ${active ? 'ring-2 ring-indigo-500 border-indigo-400' : 'hover:border-indigo-300'} cursor-pointer`}
+    >
       <div className="text-[11px] font-bold opacity-80">{label}</div>
       <div className="text-xl font-extrabold tabular-nums">{value}</div>
-    </div>
+    </button>
   );
 }
 
@@ -170,7 +177,7 @@ export default function KeyBoxTab() {
       const [invRes, masterRes, recRes] = await Promise.all([
         fetch('/api/keyboxes/inventory'),
         fetch('/api/keyboxes'),
-        fetch('/api/keyboxes/recoveries?status=回収待ち'),
+        fetch('/api/keyboxes/recoveries?status=pending'),
       ]);
       if (invRes.ok) {
         const inv = await invRes.json();
@@ -193,7 +200,7 @@ export default function KeyBoxTab() {
     Promise.all([
       fetch('/api/keyboxes/inventory').then((r) => (r.ok ? r.json() : null)),
       fetch('/api/keyboxes').then((r) => (r.ok ? r.json() : [])),
-      fetch('/api/keyboxes/recoveries?status=回収待ち').then((r) => (r.ok ? r.json() : [])),
+      fetch('/api/keyboxes/recoveries?status=pending').then((r) => (r.ok ? r.json() : [])),
     ])
       .then(([inv, m, rec]) => {
         if (cancelled) return;
@@ -222,25 +229,27 @@ export default function KeyBoxTab() {
     return () => { ro.disconnect(); window.removeEventListener('resize', update); window.removeEventListener('scroll', update); };
   }, [rows, recoveries, aggregates]);
 
-  // 備品種別のラベル（🔑 №5 / 🥿 スリッパ / 🪧 売り看板）
+  // 備品種別のラベル（🔑 №5 / 🥿 スリッパ / 🪧 売り看板）。他社キーボックスは（他社）を付す。
   const recoveryItemLabel = (rec: Recovery) =>
-    rec.itemType === 'キーボックス' ? `🔑 キーボックス №${rec.keyBoxNumber}`
+    rec.itemType === 'キーボックス' ? `🔑 キーボックス №${rec.keyBoxNumber}${rec.ownership === '他社' ? '（他社）' : ''}`
     : rec.itemType === 'スリッパ' ? '🥿 スリッパ'
     : rec.itemType === '売り看板' ? '🪧 売り看板'
     : rec.itemType;
 
-  // 回収完了。キーボックスは保管場所の選択（4F初期）を挟んで社内在庫へ戻す。それ以外は即完了。
+  // 完了処理。自社キーボックスは保管場所の選択（4F初期）→社内在庫へ。他社KBは返却完了。備品は確認のみ。
   const completeRecovery = async (rec: Recovery) => {
     if (recoveryBusy) return;
-    if (rec.itemType === 'キーボックス') { setLocModal({ mode: 'recover', rec }); return; }
-    if (!confirm(`${recoveryItemLabel(rec)}（${rec.propertyName}）を回収完了にします。よろしいですか？`)) return;
+    const isReturn = rec.ownership === '他社';
+    if (rec.itemType === 'キーボックス' && !isReturn) { setLocModal({ mode: 'recover', rec }); return; }
+    const word = isReturn ? '返却完了' : '回収完了';
+    if (!confirm(`${recoveryItemLabel(rec)}（${rec.propertyName}）を${word}にします。よろしいですか？`)) return;
     setRecoveryBusy(rec.id);
     try {
       const res = await fetch(`/api/keyboxes/recoveries/${rec.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'complete' }),
       });
-      if (!res.ok) { alert('回収完了の登録に失敗しました。'); return; }
+      if (!res.ok) { alert(`${word}の登録に失敗しました。`); return; }
       await refresh();
     } finally { setRecoveryBusy(null); }
   };
@@ -318,14 +327,14 @@ export default function KeyBoxTab() {
       {/* 集計 */}
       {aggregates && (
         <div className="px-5 py-4 border-b border-slate-200 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2.5">
-          {/* 既定は白/薄グレー。重要な「回収待ち」「重複使用」は件数がある時のみ色で強調する。 */}
-          <Stat label="当社KB総数" value={aggregates.total} tone="bg-white text-slate-800 border-slate-200" />
-          <Stat label="社内在庫" value={aggregates.inStock} tone="bg-white text-slate-800 border-slate-200" />
-          <Stat label="物件使用中" value={aggregates.inUse} tone="bg-white text-slate-800 border-slate-200" />
-          <Stat label="回収待ち" value={aggregates.pending ?? 0} tone={(aggregates.pending ?? 0) > 0 ? 'bg-amber-50 text-amber-800 border-amber-300' : 'bg-slate-50 text-slate-400 border-slate-200'} />
-          <Stat label="重複使用" value={aggregates.duplicate} tone={aggregates.duplicate > 0 ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-slate-50 text-slate-400 border-slate-200'} />
-          <Stat label="番号なし(00)" value={aggregates.none00} tone="bg-slate-50 text-slate-400 border-slate-200" />
-          <Stat label="他社所有(金)" value={aggregates.kin} tone="bg-slate-50 text-slate-400 border-slate-200" />
+          {/* クリックで一覧を絞り込み（選択中は紫枠・再クリックで解除）。集計値は変動しない。 */}
+          <Stat label="当社KB総数" value={aggregates.total} tone="bg-white text-slate-800 border-slate-200" active={filter === 'すべて'} onClick={() => setFilter('すべて')} />
+          <Stat label="社内在庫" value={aggregates.inStock} tone="bg-white text-slate-800 border-slate-200" active={filter === '社内在庫'} onClick={() => setFilter(filter === '社内在庫' ? 'すべて' : '社内在庫')} />
+          <Stat label="物件使用中" value={aggregates.inUse} tone="bg-white text-slate-800 border-slate-200" active={filter === '物件使用中'} onClick={() => setFilter(filter === '物件使用中' ? 'すべて' : '物件使用中')} />
+          <Stat label="回収待ち" value={aggregates.pending ?? 0} tone={(aggregates.pending ?? 0) > 0 ? 'bg-amber-50 text-amber-800 border-amber-300' : 'bg-slate-50 text-slate-400 border-slate-200'} active={filter === '回収待ち'} onClick={() => setFilter(filter === '回収待ち' ? 'すべて' : '回収待ち')} />
+          <Stat label="重複使用" value={aggregates.duplicate} tone={aggregates.duplicate > 0 ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-slate-50 text-slate-400 border-slate-200'} active={filter === '重複使用'} onClick={() => setFilter(filter === '重複使用' ? 'すべて' : '重複使用')} />
+          <Stat label="番号なし(00)" value={aggregates.none00} tone="bg-slate-50 text-slate-400 border-slate-200" active={filter === '番号なし'} onClick={() => setFilter(filter === '番号なし' ? 'すべて' : '番号なし')} />
+          <Stat label="他社所有(金)" value={aggregates.kin} tone="bg-slate-50 text-slate-400 border-slate-200" active={filter === '他社所有'} onClick={() => setFilter(filter === '他社所有' ? 'すべて' : '他社所有')} />
         </div>
       )}
 
@@ -333,9 +342,9 @@ export default function KeyBoxTab() {
       {recoveries.length > 0 && (
         <div className="mx-5 mt-4 rounded-lg border border-amber-300 bg-amber-50/60 overflow-hidden">
           <div className="px-4 py-2.5 border-b border-amber-200 flex items-center gap-2">
-            <span className="text-sm font-bold text-amber-800">🔁 回収待ち（未回収）</span>
+            <span className="text-sm font-bold text-amber-800">🔁 回収・返却待ち（未回収/未返却）</span>
             <span className="text-[11px] font-bold text-white bg-amber-600 rounded-full px-2 py-0.5">{recoveries.length}件</span>
-            <span className="text-[11px] text-amber-700 ml-auto">回収したら「回収完了」を押すと社内在庫に戻ります</span>
+            <span className="text-[11px] text-amber-700 ml-auto">自社は「回収完了」で社内在庫へ。他社（金）は「返却完了」で記録（在庫に戻しません）</span>
           </div>
           <div className="divide-y divide-amber-100 max-h-[200px] overflow-y-auto">
             {recoveries.map((rec) => (
@@ -356,7 +365,7 @@ export default function KeyBoxTab() {
                   disabled={recoveryBusy === rec.id}
                   className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-bold shadow-sm"
                 >
-                  {recoveryBusy === rec.id ? '処理中...' : '✓ 回収完了'}
+                  {recoveryBusy === rec.id ? '処理中...' : (rec.ownership === '他社' ? '✓ 返却完了' : '✓ 回収完了')}
                 </button>
               </div>
             ))}
@@ -408,7 +417,7 @@ export default function KeyBoxTab() {
         </div>
       )}
 
-      {/* 検索・絞り込み */}
+      {/* 検索（絞り込みは上部の集計タイルをクリック） */}
       <div className="px-5 py-4 flex flex-col sm:flex-row gap-3 sm:items-center">
         <input
           type="text"
@@ -417,19 +426,12 @@ export default function KeyBoxTab() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
-          {(['すべて', '社内在庫', '物件使用中', '重複使用'] as FilterKey[]).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${
-                filter === f ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
+        {filter !== 'すべて' && (
+          <div className="flex items-center gap-2 text-xs whitespace-nowrap">
+            <span className="font-bold text-indigo-600">絞り込み：{filter}</span>
+            <button onClick={() => setFilter('すべて')} className="px-2 py-1 rounded border border-slate-250 text-slate-500 hover:bg-slate-100 font-bold">解除</button>
+          </div>
+        )}
       </div>
 
       {/* 一覧（この領域だけ縦スクロール。ヘッダーは sticky で固定） */}

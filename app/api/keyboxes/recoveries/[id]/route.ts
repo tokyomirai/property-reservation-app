@@ -3,8 +3,9 @@ import { getSession, unauthorized } from '../../../../../utils/session';
 import { recordKeyBoxHistory } from '../../../../../utils/keybox';
 import { type NextRequest } from 'next/server';
 
-// 回収完了にする／回収待ちへ戻す（社内のみ）。
-//   body.action: 'complete'（回収完了＝社内在庫へ戻す） | 'reopen'（回収待ちへ戻す）
+// 回収/返却を「完了」にする／「待ち」へ戻す（社内のみ）。所有区分で挙動を分ける。
+//   自社: 回収完了＝社内在庫へ戻す（保管場所を記録） / 他社(金): 返却完了＝在庫に戻さない（保管場所なし）
+//   body.action: 'complete' | 'reopen'
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -15,35 +16,44 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   const action = body.action === 'reopen' ? 'reopen' : 'complete';
-  // キーボックスの回収完了時に戻す社内保管場所（"4F" または自由入力）。省略時は未設定のまま。
   const storageLocation = typeof body.storageLocation === 'string' ? body.storageLocation.trim() : '';
 
+  const existing = await prisma.keyBoxRecovery.findUnique({ where: { id } });
+  if (!existing) return Response.json({ error: '対象の記録が見つかりません。' }, { status: 404 });
+  const isOther = existing.ownership === '他社';
+
   try {
-    const updated = await prisma.keyBoxRecovery.update({
-      where: { id },
-      data:
-        action === 'complete'
-          ? { status: '回収済み', recoveredBy: session.name, recoveredAt: new Date(), recoveredLocation: storageLocation }
-          : { status: '回収待ち', recoveredBy: '', recoveredAt: null, recoveredLocation: '' },
-    });
-    // キーボックスを回収完了したら、社内在庫マスタの保管場所を更新し、使用履歴に「回収」を記録する
+    const data = action === 'complete'
+      ? {
+          status: isOther ? '返却済み' : '回収済み',
+          recoveredBy: session.name,
+          recoveredAt: new Date(),
+          recoveredLocation: isOther ? '' : storageLocation,
+        }
+      : {
+          status: isOther ? '返却待ち' : '回収待ち',
+          recoveredBy: '', recoveredAt: null, recoveredLocation: '',
+        };
+    const updated = await prisma.keyBoxRecovery.update({ where: { id }, data });
+
     if (action === 'complete' && updated.itemType === 'キーボックス') {
-      if (storageLocation) {
+      // 自社のみ社内在庫マスタの保管場所を更新（他社は在庫に戻さない）
+      if (!isOther && storageLocation) {
         await prisma.keyBox.updateMany({ where: { number: updated.keyBoxNumber }, data: { storageLocation } });
       }
       await recordKeyBoxHistory({
         keyBoxNumber: updated.keyBoxNumber,
-        action: '回収',
+        action: isOther ? '返却' : '回収',
         propertyId: updated.propertyId,
         propertyName: updated.propertyName,
-        setupLocation: storageLocation || '',
+        setupLocation: isOther ? '' : (storageLocation || ''),
         unlockCode: updated.unlockCode,
         operator: session.name,
       });
     }
     return Response.json(updated);
   } catch {
-    return Response.json({ error: '対象の回収記録が見つかりません。' }, { status: 404 });
+    return Response.json({ error: '対象の記録が見つかりません。' }, { status: 404 });
   }
 }
 

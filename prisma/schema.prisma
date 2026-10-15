@@ -27,6 +27,8 @@ model KeyBoxRecovery {
   id             String   @id @default(cuid())
   // 備品種別: キーボックス / スリッパ / 売り看板（既存データはキーボックス）
   itemType       String   @default("キーボックス")
+  // キーボックスの所有区分: 自社 / 他社（金）。他社は「返却」管理で社内在庫に戻さない。既存は自社。
+  ownership      String   @default("自社")
   // キーボックスのみ番号を持つ。スリッパ・売り看板は空文字（番号・個数は管理しない）。
   keyBoxNumber   String
   // 物件のスナップショット（物件削除後も残す）

@@ -2,6 +2,7 @@ import { prisma } from '../../../utils/db';
 import { getSession, unauthorized } from '../../../utils/session';
 import { validatePropertyLinks } from '../../../utils/propertyLinks';
 import { normalizeViewingStartDate } from '../../../utils/viewingWindow';
+import { isCompanyKb, recordKeyBoxHistory } from '../../../utils/keybox';
 import { type NextRequest } from 'next/server';
 
 // 公開側に返すフィールド（鍵情報・社内メモは除外）
@@ -38,10 +39,13 @@ export async function GET(request: NextRequest) {
       return Response.json(properties);
     } else {
       // 公開: isPublished=true のみ、安全なフィールドのみ。
-      // 「仕入決済前」（契約済だが決済前で公開・販売不可）は公開一覧に出さない。
+      // 仕入決済前（決済前で公開・販売停止）・売却済みは公開一覧に出さない。
       const properties = await prisma.property.findMany({
         where: {
           isPublished: true,
+          isAcquisitionPending: false,
+          soldAt: null,
+          // 後方互換：移行前の旧「仕入決済前」ラベルも公開一覧から除外（反映中の露出防止）
           salesStatus: { not: '仕入決済前' },
         },
         select: PUBLIC_SELECT,
@@ -78,6 +82,7 @@ export async function POST(request: NextRequest) {
       name: body.name,
       address: body.address ?? '',
       salesStatus: body.salesStatus ?? '販売中',
+      isAcquisitionPending: Boolean(body.isAcquisitionPending),
       viewingStatus: body.viewingStatus ?? '内見可能',
       // 空欄・不正値は NULL（＝日付制限なし）として保存する
       viewingStartDate: normalizeViewingStartDate(body.viewingStartDate) || null,
@@ -97,5 +102,18 @@ export async function POST(request: NextRequest) {
       lastUpdatedBy: session.name,
     },
   });
+
+  // 当社キーボックスが設定された新規物件は「設置」履歴を自動記録
+  if (property.hasKeyBox === 'あり' && isCompanyKb(property.keyBoxNumber)) {
+    await recordKeyBoxHistory({
+      keyBoxNumber: property.keyBoxNumber,
+      action: '設置',
+      propertyId: property.id,
+      propertyName: property.name,
+      setupLocation: property.setupLocation,
+      unlockCode: property.unlockCode,
+      operator: session.name,
+    });
+  }
   return Response.json(property, { status: 201 });
 }

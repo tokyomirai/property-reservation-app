@@ -148,6 +148,22 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'Property not found or not available' }, { status: 404 });
   }
 
+  // 売却済み物件は予約不可（履歴は残すが新規予約は停止。直接リクエスト対策）
+  if (property.soldAt) {
+    return Response.json(
+      { error: 'この物件は売却済みのため、内見予約を受け付けていません。' },
+      { status: 403 }
+    );
+  }
+
+  // 仕入決済前（決済前で公開・販売停止）は予約不可（フラグ＋後方互換の旧ラベル両方で判定）
+  if (property.isAcquisitionPending || property.salesStatus === '仕入決済前') {
+    return Response.json(
+      { error: 'この物件は現在お申込みを受け付けていません。' },
+      { status: 403 }
+    );
+  }
+
   // 非公開物件は予約不可（見た目だけでなくサーバー側でも拒否。フォームURL直アクセス・直接リクエスト対策）
   if (!property.isPublished) {
     return Response.json(

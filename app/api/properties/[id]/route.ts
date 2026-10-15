@@ -2,6 +2,7 @@ import { prisma } from '../../../../utils/db';
 import { getSession, unauthorized } from '../../../../utils/session';
 import { validatePropertyLinks } from '../../../../utils/propertyLinks';
 import { normalizeViewingStartDate } from '../../../../utils/viewingWindow';
+import { normalizeKb, isCompanyKb, recordKeyBoxHistory } from '../../../../utils/keybox';
 import { type NextRequest } from 'next/server';
 
 // GET: 物件詳細取得（公開・管理者両用）
@@ -24,8 +25,9 @@ export async function GET(
     if (session) {
       return Response.json(property);
     } else {
-      // 非公開、または「仕入決済前」（公開・販売不可）の物件は公開側に出さない
-      if (!property.isPublished || property.salesStatus === '仕入決済前') {
+      // 非公開・仕入決済前（決済前で公開販売停止）・売却済み の物件は公開側に出さない
+      // （後方互換：移行前の旧「仕入決済前」ラベルも対象）
+      if (!property.isPublished || property.isAcquisitionPending || property.soldAt || property.salesStatus === '仕入決済前') {
         return Response.json({ error: 'Property not found or not available' }, { status: 404 });
       }
       // 公開表示時はセキュリティ情報および管理情報を除外
@@ -58,6 +60,12 @@ export async function PUT(
     return Response.json({ error: linkError }, { status: 400 });
   }
 
+  // キーボックス使用履歴（設置/変更/解除）の自動記録のため、更新前の値を控える
+  const before = await prisma.property.findUnique({
+    where: { id },
+    select: { keyBoxNumber: true, unlockCode: true, setupLocation: true },
+  });
+
   try {
     const property = await prisma.property.update({
       where: { id },
@@ -65,6 +73,7 @@ export async function PUT(
         name: body.name,
         address: body.address,
         salesStatus: body.salesStatus,
+        isAcquisitionPending: Boolean(body.isAcquisitionPending),
         viewingStatus: body.viewingStatus,
         // 空欄・不正値は NULL（＝日付制限なし）として保存する
         viewingStartDate: normalizeViewingStartDate(body.viewingStartDate) || null,
@@ -84,6 +93,24 @@ export async function PUT(
         lastUpdatedBy: session.name,
       },
     });
+
+    // キーボックス使用履歴の自動記録（入力は増やさず、物件編集の差分から判定）
+    const oldNum = normalizeKb(before?.keyBoxNumber);
+    const newNum = normalizeKb(property.keyBoxNumber);
+    const op = session.name;
+    if (oldNum !== newNum) {
+      // 付け替え：旧番号は「解除」、新番号は「設置」
+      if (isCompanyKb(oldNum)) {
+        await recordKeyBoxHistory({ keyBoxNumber: oldNum, action: '解除', propertyId: id, propertyName: property.name, setupLocation: before?.setupLocation ?? '', unlockCode: before?.unlockCode ?? '', operator: op });
+      }
+      if (isCompanyKb(newNum)) {
+        await recordKeyBoxHistory({ keyBoxNumber: newNum, action: '設置', propertyId: id, propertyName: property.name, setupLocation: property.setupLocation, unlockCode: property.unlockCode, operator: op });
+      }
+    } else if (isCompanyKb(newNum) && (normalizeKb(before?.unlockCode) !== normalizeKb(property.unlockCode) || (before?.setupLocation ?? '') !== property.setupLocation)) {
+      // 同じ番号で解除番号・設置場所が変わった：「変更」
+      await recordKeyBoxHistory({ keyBoxNumber: newNum, action: '変更', propertyId: id, propertyName: property.name, setupLocation: property.setupLocation, unlockCode: property.unlockCode, operator: op });
+    }
+
     return Response.json(property);
   } catch {
     return Response.json({ error: 'Property not found' }, { status: 404 });

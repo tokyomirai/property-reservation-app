@@ -156,9 +156,9 @@ export default function BrokerPage() {
                         <span className={`px-2.5 py-0.5 rounded text-[11px] font-bold ${
                           prop.salesStatus === '販売中' ? 'bg-sky-50 text-sky-700 border border-sky-200' :
                           prop.salesStatus === '申込あり' ? 'bg-amber-50 text-amber-700 border border-amber-250' :
-                          prop.salesStatus === '契約予定' ? 'bg-purple-50 text-purple-700 border border-purple-200' :
-                          prop.salesStatus === '契約済' ? 'bg-slate-100 text-slate-650 border border-slate-200' :
-                          'bg-rose-50 text-rose-700 border border-rose-200'
+                          prop.salesStatus === '契約済み' ? 'bg-slate-100 text-slate-650 border border-slate-200' :
+                          prop.salesStatus === '募集停止' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
+                          'bg-slate-100 text-slate-650 border border-slate-200'
                         }`}>
                           {prop.salesStatus}
                         </span>

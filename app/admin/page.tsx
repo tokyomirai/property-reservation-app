@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import CalendarTab from './CalendarTab';
+import KeyBoxTab from './KeyBoxTab';
 import OperationHistoryModal from './OperationHistoryModal';
 import StickyHScroll from './StickyHScroll';
 import { COMPANY_NAME, COMPANY_PHONE, CANCEL_NOTICE_TITLE } from '../../utils/company';
@@ -13,10 +14,15 @@ interface Property {
   name: string;
   address: string;
   salesStatus: string;
+  // 仕入決済前（販売状況から分離した専用フラグ）
+  isAcquisitionPending: boolean;
   viewingStatus: string;
   // 内見受付開始日（"YYYY-MM-DD"）。未設定は null。
   viewingStartDate: string | null;
   isPublished: boolean;
+  // 売却済み（NULL/空=未売却）。履歴は残したまま一覧除外・非公開・新規予約停止。
+  soldAt?: string | null;
+  soldBy?: string;
   hasKeyBox: string;
   keyBoxNumber: string;
   unlockCode: string;
@@ -69,7 +75,7 @@ export default function AdminPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'properties' | 'reservations' | 'calendar'>('properties');
+  const [activeTab, setActiveTab] = useState<'properties' | 'reservations' | 'calendar' | 'keyboxes'>('properties');
 
   // 物件一覧のワード検索（物件名・住所の部分一致）。入力は即時反映しつつ、
   // 描画負荷を抑えるため 200ms の debounce を挟んで絞り込みに用いる。
@@ -83,13 +89,34 @@ export default function AdminPage() {
   // NFKC正規化＋小文字化で、全角/半角・大文字/小文字の違いを可能な範囲で無視して比較する。
   const normalizeForSearch = (s: string) => s.normalize('NFKC').toLowerCase();
   const query = normalizeForSearch(debouncedSearch.trim());
-  const filteredProperties = query
-    ? properties.filter(
-        (p) =>
-          normalizeForSearch(p.name).includes(query) ||
-          normalizeForSearch(p.address).includes(query)
-      )
-    : properties;
+
+  // ステータス別の絞り込み（販売状況／公開設定／内見状況／売却済み）。既定は売却済みを除外。
+  const [fSales, setFSales] = useState<'すべて' | '販売中' | '申込あり' | '契約済み' | '募集停止'>('すべて');
+  const [fPublish, setFPublish] = useState<'すべて' | '公開' | '非公開'>('すべて');
+  const [fViewing, setFViewing] = useState<'すべて' | '内見可能' | '内見不可'>('すべて');
+  const [fSold, setFSold] = useState<'exclude' | 'only'>('exclude');
+  // 仕入決済前（既存のラジオ=isAcquisitionPending フラグで絞り込み。新規項目は作らない）
+  const [fAcq, setFAcq] = useState<'すべて' | '該当のみ'>('すべて');
+
+  const filteredProperties = properties.filter((p) => {
+    const isSold = Boolean(p.soldAt);
+    // 売却済み: 既定(exclude)は除外、only は売却済みのみ
+    if (fSold === 'exclude' && isSold) return false;
+    if (fSold === 'only' && !isSold) return false;
+    // 販売状況
+    if (fSales !== 'すべて' && p.salesStatus !== fSales) return false;
+    // 公開設定
+    if (fPublish === '公開' && !p.isPublished) return false;
+    if (fPublish === '非公開' && p.isPublished) return false;
+    // 内見状況（内見可能 / それ以外=内見不可 の2分類）
+    if (fViewing === '内見可能' && p.viewingStatus !== '内見可能') return false;
+    if (fViewing === '内見不可' && p.viewingStatus === '内見可能') return false;
+    // 仕入決済前（該当のみ）
+    if (fAcq === '該当のみ' && !p.isAcquisitionPending) return false;
+    // 物件名・住所の検索
+    if (query && !(normalizeForSearch(p.name).includes(query) || normalizeForSearch(p.address).includes(query))) return false;
+    return true;
+  });
 
   // 固定領域（タイトル+タブ）を上部ヘッダー直下に貼り付けたうえで、一覧テーブルだけを内部スクロールさせる。
   // テーブル領域の高さ =「ビューポート高 - テーブル領域の上端位置」で算出し、固定領域と重ならず画面内に収める。
@@ -127,6 +154,7 @@ export default function AdminPage() {
     name: '',
     address: '',
     salesStatus: '販売中',
+    isAcquisitionPending: false,
     viewingStatus: '内見可能',
     viewingStartDate: '',
     isPublished: true,
@@ -210,6 +238,7 @@ export default function AdminPage() {
         name: '',
         address: '',
         salesStatus: '販売中',
+        isAcquisitionPending: false,
         viewingStatus: '内見可能',
         viewingStartDate: '',
         isPublished: true,
@@ -279,6 +308,58 @@ export default function AdminPage() {
     }
   };
 
+  // 売却済み化（物理削除せず保管）。登録備品がある物件は回収確認モーダルを挟む。
+  const [sellingProperty, setSellingProperty] = useState<Property | null>(null);
+  const [soldBusy, setSoldBusy] = useState(false);
+  // 備品ごとの回収状況の選択（true=回収済み / false=未回収）。初期は未選択。
+  const [soldChoices, setSoldChoices] = useState<Record<string, boolean>>({});
+  // キーボックス回収済み時の保管場所（4F初期／その他は自由入力）
+  const [soldKbLoc, setSoldKbLoc] = useState<'4F' | 'その他'>('4F');
+  const [soldKbLocText, setSoldKbLocText] = useState('');
+  const openSold = (prop: Property) => { setSoldChoices({}); setSoldKbLoc('4F'); setSoldKbLocText(''); setSellingProperty(prop); };
+  /** その物件に登録されている備品（回収確認の対象）を列挙 */
+  const soldItems = (p: Property): string[] => {
+    const n = (p.keyBoxNumber ?? '').trim();
+    const items: string[] = [];
+    if (p.hasKeyBox === 'あり' && n !== '' && n !== '00' && n !== '金') items.push('キーボックス');
+    if (p.hasSlippers === 'あり') items.push('スリッパ');
+    if (p.hasSignboard === 'あり') items.push('売り看板');
+    return items;
+  };
+  const confirmSold = async () => {
+    if (!sellingProperty || soldBusy) return;
+    setSoldBusy(true);
+    try {
+      const keyboxLocation = soldKbLoc === '4F' ? '4F' : soldKbLocText.trim();
+      const res = await fetch(`/api/properties/${sellingProperty.id}/sold`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recoveries: soldChoices, keyboxLocation }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        alert(d?.error || '売却済みへの変更に失敗しました。');
+        return;
+      }
+      await refreshData();
+      setSellingProperty(null);
+      setEditingProperty(null);
+    } finally {
+      setSoldBusy(false);
+    }
+  };
+  // 売却済みの解除（誤操作時の復元）
+  const handleUnsold = async (id: string) => {
+    if (!confirm('売却済みを解除して通常の物件に戻します。\n（公開状況は非公開のままです。必要に応じて公開に変更してください）\nよろしいですか？')) return;
+    try {
+      const res = await fetch(`/api/properties/${id}/sold`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('failed');
+      await refreshData();
+      setEditingProperty(null);
+    } catch {
+      alert('売却済みの解除に失敗しました。');
+    }
+  };
   // 予約ステータス更新 (承認/却下/キャンセル)
   //   承認済 … 内見確定（メール・カレンダー登録）
   //   却下   … 弊社都合で受けられない
@@ -408,6 +489,16 @@ export default function AdminPage() {
           >
             🗓️ 内見カレンダー（社内）
           </button>
+          <button
+            onClick={() => setActiveTab('keyboxes')}
+            className={`px-5 py-4 text-sm font-bold border-b-2 transition-all duration-200 ${
+              activeTab === 'keyboxes'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-400 hover:text-slate-650'
+            }`}
+          >
+            🔑 キーボックス在庫
+          </button>
 
           {/* 物件管理タブのときのみ、タブ右側に物件名・住所のワード検索窓を表示 */}
           {activeTab === 'properties' && (
@@ -449,6 +540,61 @@ export default function AdminPage() {
         {/* 1. 物件管理タブ */}
         {activeTab === 'properties' && (
           <div className="bg-white border border-slate-200 rounded-b-xl overflow-hidden shadow-md">
+            {/* ステータス別の絞り込み。順番は登録画面と統一（① 公開設定 ② 販売状況 ③ 内見状況）。
+                各項目の高さ・間隔を揃え、横に間延びしないよう左寄せ＋件数のみ右端。スマホでは折り返す。 */}
+            <div className="px-4 py-3 border-b border-slate-200 bg-slate-50/70 flex flex-wrap items-center gap-x-3 gap-y-2">
+              <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
+                公開
+                <select value={fPublish} onChange={(e) => setFPublish(e.target.value as any)}
+                  className="h-9 rounded-lg border border-slate-250 bg-white pl-2.5 pr-7 text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500">
+                  <option value="すべて">すべて</option>
+                  <option value="公開">公開</option>
+                  <option value="非公開">非公開</option>
+                </select>
+              </label>
+              <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
+                販売
+                <select value={fSales} onChange={(e) => setFSales(e.target.value as any)}
+                  className="h-9 rounded-lg border border-slate-250 bg-white pl-2.5 pr-7 text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500">
+                  <option value="すべて">すべて</option>
+                  <option value="販売中">販売中</option>
+                  <option value="申込あり">申込あり</option>
+                  <option value="契約済み">契約済み</option>
+                  <option value="募集停止">募集停止</option>
+                </select>
+              </label>
+              <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
+                内見
+                <select value={fViewing} onChange={(e) => setFViewing(e.target.value as any)}
+                  className="h-9 rounded-lg border border-slate-250 bg-white pl-2.5 pr-7 text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500">
+                  <option value="すべて">すべて</option>
+                  <option value="内見可能">内見可能</option>
+                  <option value="内見不可">内見不可</option>
+                </select>
+              </label>
+              <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
+                仕入
+                <select value={fAcq} onChange={(e) => setFAcq(e.target.value as any)}
+                  className="h-9 rounded-lg border border-slate-250 bg-white pl-2.5 pr-7 text-xs font-medium text-slate-800 focus:outline-none focus:border-indigo-500">
+                  <option value="すべて">すべて</option>
+                  <option value="該当のみ">仕入決済前のみ</option>
+                </select>
+              </label>
+              {/* 売却済み: 通常は除外 / 売却済みのみ（コンパクトなトグル） */}
+              <div className="flex items-center h-9 gap-0.5 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                <button type="button" onClick={() => setFSold('exclude')}
+                  className={`px-2.5 h-full rounded-md text-[11px] font-bold transition-colors ${fSold === 'exclude' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                  通常
+                </button>
+                <button type="button" onClick={() => setFSold('only')}
+                  className={`px-2.5 h-full rounded-md text-[11px] font-bold transition-colors ${fSold === 'only' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                  売却済み
+                </button>
+              </div>
+              <span className="ml-auto text-xs font-bold text-slate-500 tabular-nums">
+                {filteredProperties.length} 件{fSold === 'only' ? '（売却済み）' : ''}
+              </span>
+            </div>
             {/* 一覧だけを内部スクロールさせる領域。高さは「ビューポート - 固定領域の下端」で算出し、
                 固定領域の直下からビューポート下端までに収める。横は overflow-x で従来どおりスクロール可能。 */}
             <div ref={scrollAreaRef} className="overflow-auto" style={{ maxHeight: `calc(100vh - ${scrollAreaTop}px - 16px)` }}>
@@ -462,8 +608,7 @@ export default function AdminPage() {
                     <th className="px-4 py-4">販売状況</th>
                     <th className="px-4 py-4">内見状況</th>
                     <th className="px-4 py-4">鍵管理</th>
-                    <th className="px-4 py-4">スリッパ</th>
-                    <th className="px-4 py-4">売り看板</th>
+                    <th className="px-4 py-4">備品</th>
                     <th className="px-4 py-4">公開資料</th>
                     <th className="px-6 py-4 text-right">操作</th>
                   </tr>
@@ -471,7 +616,7 @@ export default function AdminPage() {
                 <tbody className="divide-y divide-slate-100 text-sm">
                   {filteredProperties.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-6 py-16 text-center text-slate-500 text-sm font-medium">
+                      <td colSpan={8} className="px-6 py-16 text-center text-slate-500 text-sm font-medium">
                         該当する物件がありません
                       </td>
                     </tr>
@@ -499,15 +644,26 @@ export default function AdminPage() {
 
                         {/* 公開状況 */}
                         <td className="px-4 py-4 whitespace-nowrap">
-                          {prop.isPublished ? (
-                            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                              公開中
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200">
-                              非公開
-                            </span>
-                          )}
+                          <div className="flex flex-col gap-1 items-start">
+                            {prop.soldAt ? (
+                              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-600 text-white">
+                                売却済み
+                              </span>
+                            ) : prop.isPublished ? (
+                              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                公開中
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                                非公開
+                              </span>
+                            )}
+                            {prop.isAcquisitionPending && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-300">
+                                仕入決済前
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* 販売状況 */}
@@ -515,10 +671,9 @@ export default function AdminPage() {
                           <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
                             prop.salesStatus === '販売中' ? 'bg-sky-50 text-sky-700 border border-sky-200' :
                             prop.salesStatus === '申込あり' ? 'bg-amber-50 text-amber-700 border border-amber-250' :
-                            prop.salesStatus === '契約予定' ? 'bg-purple-50 text-purple-700 border border-purple-200' :
-                            prop.salesStatus === '契約済' ? 'bg-slate-100 text-slate-600 border border-slate-200' :
-                            prop.salesStatus === '仕入決済前' ? 'bg-orange-100 text-orange-800 border border-orange-300' :
-                            'bg-rose-50 text-rose-700 border border-rose-200'
+                            prop.salesStatus === '契約済み' ? 'bg-slate-100 text-slate-600 border border-slate-200' :
+                            prop.salesStatus === '募集停止' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
+                            'bg-slate-100 text-slate-600 border border-slate-200'
                           }`}>
                             {prop.salesStatus}
                           </span>
@@ -547,8 +702,8 @@ export default function AdminPage() {
                         {/* 鍵管理 */}
                         <td className="px-4 py-4 whitespace-nowrap">
                           {!prop.hasKeyBox ? (
-                            <span className="px-2 py-1 rounded bg-rose-600 text-white text-[11px] font-bold shadow-sm">
-                              ⚠️ 未設定
+                            <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 text-[11px] font-bold">
+                              未設定
                             </span>
                           ) : prop.hasKeyBox === 'あり' ? (
                             <div className="space-y-0.5 text-xs">
@@ -573,38 +728,25 @@ export default function AdminPage() {
                           )}
                         </td>
 
-                        {/* スリッパ */}
+                        {/* 備品（スリッパ / 売り看板）あり・なし・未設定を2行でコンパクト表示 */}
                         <td className="px-4 py-4 whitespace-nowrap">
-                          {prop.hasSlippers === '' ? (
-                            <span className="px-2 py-1 rounded bg-rose-600 text-white text-[11px] font-bold shadow-sm">
-                              ⚠️ 未設定
-                            </span>
-                          ) : prop.hasSlippers === 'あり' ? (
-                            <span className="px-2.5 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">
-                              あり
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-1 rounded bg-slate-100 text-slate-500 text-xs">
-                              なし
-                            </span>
-                          )}
-                        </td>
-
-                        {/* 売り看板 */}
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          {prop.hasSignboard === '' ? (
-                            <span className="px-2 py-1 rounded bg-rose-600 text-white text-[11px] font-bold shadow-sm">
-                              ⚠️ 未設定
-                            </span>
-                          ) : prop.hasSignboard === 'あり' ? (
-                            <span className="px-2.5 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold">
-                              あり
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-1 rounded bg-slate-100 text-slate-500 text-xs">
-                              なし
-                            </span>
-                          )}
+                          <div className="space-y-1 text-[11px]">
+                            {([
+                              { label: 'スリッパ', v: prop.hasSlippers },
+                              { label: '看板', v: prop.hasSignboard },
+                            ] as const).map((it) => (
+                              <div key={it.label} className="flex items-center gap-1.5">
+                                <span className="inline-block w-12 text-slate-500 font-medium">{it.label}</span>
+                                {it.v === 'あり' ? (
+                                  <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">あり</span>
+                                ) : it.v === 'なし' ? (
+                                  <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200">なし</span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 font-bold">未設定</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </td>
 
                         {/* 公開資料（詳細資料 / ルームツアー動画 / 360°カメラのURL登録有無）
@@ -818,6 +960,8 @@ export default function AdminPage() {
           <CalendarTab properties={properties.map(p => ({ id: p.id, name: p.name, address: p.address, viewingStartDate: p.viewingStartDate }))} />
         )}
 
+        {/* 4. キーボックス在庫タブ */}
+        {activeTab === 'keyboxes' && <KeyBoxTab />}
 
       </div>
 
@@ -879,14 +1023,12 @@ export default function AdminPage() {
                   <select
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                     value={newProp.salesStatus}
-                    onChange={e => setNewProp({...newProp, salesStatus: e.target.value as any})}
+                    onChange={e => { const v = e.target.value; setNewProp({ ...newProp, salesStatus: v, ...(v === '契約済み' ? { isPublished: false } : {}) }); }}
                   >
                     <option value="販売中">販売中</option>
                     <option value="申込あり">申込あり</option>
-                    <option value="契約予定">契約予定</option>
-                    <option value="契約済">契約済</option>
-                    <option value="募集停止中">募集停止中</option>
-                    <option value="仕入決済前">仕入決済前</option>
+                    <option value="契約済み">契約済み</option>
+                    <option value="募集停止">募集停止</option>
                   </select>
                 </div>
                 <div className="col-span-1">
@@ -915,11 +1057,17 @@ export default function AdminPage() {
                     設定すると、この日より前の内見予約を受け付けません（仲介画面でも選択不可）。未設定なら日付制限なし。
                   </p>
                 </div>
+                <label className="col-span-3 flex items-center gap-2 text-sm text-slate-700 font-medium">
+                  <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    checked={newProp.isAcquisitionPending}
+                    onChange={e => setNewProp({ ...newProp, isAcquisitionPending: e.target.checked })} />
+                  仕入決済前（決済前につき公開・販売を停止）
+                </label>
               </div>
 
               <div className="border-t border-slate-200 pt-4 space-y-4">
                 <h4 className="text-sm font-bold text-indigo-600 flex items-center gap-1.5">🔑 鍵・キーボックス管理</h4>
-                
+
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">キーボックス設置</label>
                   <select
@@ -1163,14 +1311,16 @@ export default function AdminPage() {
                   <select
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                     value={editingProperty.salesStatus}
-                    onChange={e => setEditingProperty({...editingProperty, salesStatus: e.target.value as any})}
+                    onChange={e => { const v = e.target.value; setEditingProperty({ ...editingProperty, salesStatus: v, ...(v === '契約済み' ? { isPublished: false } : {}) }); }}
                   >
                     <option value="販売中">販売中</option>
                     <option value="申込あり">申込あり</option>
-                    <option value="契約予定">契約予定</option>
-                    <option value="契約済">契約済</option>
-                    <option value="募集停止中">募集停止中</option>
-                    <option value="仕入決済前">仕入決済前</option>
+                    <option value="契約済み">契約済み</option>
+                    <option value="募集停止">募集停止</option>
+                    {/* 旧データ互換（移行前の値が入っている場合も選択状態を保持） */}
+                    {!['販売中','申込あり','契約済み','募集停止'].includes(editingProperty.salesStatus) && (
+                      <option value={editingProperty.salesStatus}>{editingProperty.salesStatus}（旧）</option>
+                    )}
                   </select>
                 </div>
                 <div className="col-span-1">
@@ -1199,6 +1349,12 @@ export default function AdminPage() {
                     設定すると、この日より前の内見予約を受け付けません（仲介画面でも選択不可）。未設定なら日付制限なし。
                   </p>
                 </div>
+                <label className="col-span-3 flex items-center gap-2 text-sm text-slate-700 font-medium">
+                  <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    checked={editingProperty.isAcquisitionPending}
+                    onChange={e => setEditingProperty({ ...editingProperty, isAcquisitionPending: e.target.checked })} />
+                  仕入決済前（決済前につき公開・販売を停止）
+                </label>
               </div>
 
               <div className="border-t border-slate-200 pt-4 space-y-4">
@@ -1361,27 +1517,57 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              <div className="border-t border-slate-200 pt-4 flex gap-3">
+              {/* フッター操作：保存を最優先（全幅・最上段）。売却済み／削除は「管理操作」として
+                  下段にまとめ、通常操作（保存・キャンセル）と視覚的に分離して誤操作を防ぐ。 */}
+              <div className="border-t border-slate-200 pt-4 space-y-3">
+                {/* 主操作：保存 */}
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md"
+                  className="w-full h-12 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md"
                 >
                   保存する
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteProperty(editingProperty.id)}
-                  className="px-4 py-2.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-sm border border-rose-200"
-                >
-                  物件削除
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditingProperty(null)}
-                  className="px-4 py-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-650 font-bold text-sm border border-slate-250"
-                >
-                  キャンセル
-                </button>
+                {/* 副操作：キャンセル（左）／ 管理操作（右） */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingProperty(null)}
+                    className="h-10 px-5 rounded-lg bg-white hover:bg-slate-100 text-slate-600 font-bold text-sm border border-slate-250 whitespace-nowrap"
+                  >
+                    キャンセル
+                  </button>
+                  <div className="ml-auto flex items-center gap-2 pl-3 border-l border-slate-200">
+                    <span className="text-[11px] font-bold text-slate-400 whitespace-nowrap">管理操作</span>
+                    {editingProperty.soldAt ? (
+                      <button
+                        type="button"
+                        onClick={() => handleUnsold(editingProperty.id)}
+                        className="h-10 px-4 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-sm border border-amber-200 whitespace-nowrap"
+                      >
+                        売却済みを解除
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => openSold(editingProperty)}
+                        className="h-10 px-4 rounded-lg bg-white hover:bg-rose-50 text-rose-600 font-bold text-sm border border-rose-300 whitespace-nowrap"
+                      >
+                        🏷️ 売却済みにする
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteProperty(editingProperty.id)}
+                      title="履歴ごと完全に削除します（通常は売却済みをご利用ください）"
+                      className="h-10 px-3 rounded-lg bg-white hover:bg-rose-50 text-rose-500 font-bold text-sm border border-slate-250 whitespace-nowrap"
+                    >
+                      🗑 削除
+                    </button>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  ※「削除」は物件・内見履歴ごと完全に消去します。売却した物件は「売却済みにする」で保管してください。
+                </p>
               </div>
             </form>
           </div>
@@ -1397,6 +1583,106 @@ export default function AdminPage() {
           title={historyTarget.title}
           onClose={() => setHistoryTarget(null)}
         />
+      )}
+
+      {/* 売却済み確認モーダル（キーボックス回収確認つき） */}
+      {sellingProperty && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onClick={() => !soldBusy && setSellingProperty(null)}>
+          <div className="w-full max-w-md rounded-xl bg-white shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-200 bg-slate-50">
+              <h3 className="text-sm font-bold text-slate-800">🏷️ 売却済みにする</h3>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <p className="text-sm font-bold text-slate-800">{sellingProperty.name}</p>
+                <p className="text-xs text-slate-500 mt-0.5">📍 {sellingProperty.address}</p>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 border border-slate-200 rounded-lg p-3">
+                売却済みにすると <b className="text-slate-800">非公開・通常一覧から除外・新規内見予約の停止</b> を一括で行います。
+                物件情報と過去の内見履歴は <b className="text-slate-800">削除されず保存</b> されます（誤操作時は解除可能）。
+              </p>
+
+              {(() => {
+                const items = soldItems(sellingProperty);
+                if (items.length === 0) {
+                  return (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+                      回収確認が必要な備品（キーボックス・スリッパ・売り看板）の登録はありません。そのまま売却済みにできます。
+                    </div>
+                  );
+                }
+                const labelOf = (it: string) =>
+                  it === 'キーボックス' ? `🔑 キーボックス №${sellingProperty.keyBoxNumber}` : it === 'スリッパ' ? '🥿 スリッパ' : '🪧 売り看板';
+                return (
+                  <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 p-3 space-y-2.5">
+                    <p className="text-sm font-bold text-slate-800">登録備品の回収状況を選択してください</p>
+                    {items.map((it) => (
+                      <div key={it} className="bg-white rounded-lg border border-slate-200 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-bold text-slate-800">{labelOf(it)}</span>
+                          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 shrink-0">
+                            <button type="button" onClick={() => setSoldChoices((c) => ({ ...c, [it]: true }))}
+                              className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors ${soldChoices[it] === true ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                              回収済み
+                            </button>
+                            <button type="button" onClick={() => setSoldChoices((c) => ({ ...c, [it]: false }))}
+                              className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors ${soldChoices[it] === false ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                              未回収
+                            </button>
+                          </div>
+                        </div>
+                        {/* キーボックスを回収済みにした場合のみ、直下に社内保管場所を入力（4F初期／その他は自由入力） */}
+                        {it === 'キーボックス' && soldChoices[it] === true && (
+                          <div className="mt-2 pt-2 border-t border-slate-100">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[11px] font-bold text-slate-500">社内保管場所</span>
+                              <div className="flex items-center gap-0.5 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                                <button type="button" onClick={() => setSoldKbLoc('4F')}
+                                  className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-colors ${soldKbLoc === '4F' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                                  4F
+                                </button>
+                                <button type="button" onClick={() => setSoldKbLoc('その他')}
+                                  className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-colors ${soldKbLoc === 'その他' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                                  その他
+                                </button>
+                              </div>
+                              {soldKbLoc === 'その他' && (
+                                <input
+                                  type="text" autoFocus placeholder="保管場所を入力（例：2F書庫）"
+                                  className="flex-1 min-w-[140px] bg-slate-50 border border-slate-250 rounded-lg px-2.5 py-1 text-xs text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white"
+                                  value={soldKbLocText} onChange={(e) => setSoldKbLocText(e.target.value)}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    <p className="text-[11px] text-slate-500">
+                      「回収済み」は回収日・回収者・保管場所を記録（キーボックスは指定の場所で社内在庫に戻します）。「未回収」は回収待ち一覧に残ります。
+                    </p>
+                  </div>
+                );
+              })()}
+            </div>
+            <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-2">
+              <button onClick={() => !soldBusy && setSellingProperty(null)} className="px-4 py-2 rounded-lg bg-white hover:bg-slate-100 text-slate-600 border border-slate-250 text-xs font-bold">
+                キャンセル
+              </button>
+              <button
+                onClick={confirmSold}
+                disabled={
+                  soldBusy
+                  || soldItems(sellingProperty).some((it) => typeof soldChoices[it] !== 'boolean')
+                  || (soldChoices['キーボックス'] === true && soldKbLoc === 'その他' && !soldKbLocText.trim())
+                }
+                className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {soldBusy ? '処理中...' : '売却済みにする'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {selectedReservationForMail && (() => {

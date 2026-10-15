@@ -6,15 +6,85 @@ datasource db {
   provider  = "postgresql"
 }
 
+/// 社内保有のキーボックス番号マスタ。
+/// 物件側の「管理番号(keyBoxNumber)」と照合して在庫状況を判定する。
+/// 先頭ゼロを保持するため number は文字列で持つ（例: "0925"）。
+model KeyBox {
+  id        String   @id @default(cuid())
+  number    String   @unique
+  notes     String   @default("")
+  isActive  Boolean  @default(true)
+  // 社内在庫時の保管場所（"4F" または自由入力）。空文字＝未設定（既存データは勝手に4Fにしない）。
+  storageLocation String @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// キーボックスの回収待ち／回収履歴。物件を売却済みにした時や手動で登録する。
+/// 物件を削除しても参照できるよう、物件名・設置場所・解除番号はスナップショットで保存する。
+/// status が「回収待ち」の番号は、在庫照合で「社内在庫」に戻さない（回収完了まで保持）。
+model KeyBoxRecovery {
+  id             String   @id @default(cuid())
+  // 備品種別: キーボックス / スリッパ / 売り看板（既存データはキーボックス）
+  itemType       String   @default("キーボックス")
+  // キーボックスのみ番号を持つ。スリッパ・売り看板は空文字（番号・個数は管理しない）。
+  keyBoxNumber   String
+  // 物件のスナップショット（物件削除後も残す）
+  propertyId     String   @default("")
+  propertyName   String   @default("")
+  propertyAddress String  @default("")
+  setupLocation  String   @default("")
+  unlockCode     String   @default("")
+  // 回収待ち | 回収済み
+  status         String   @default("回収待ち")
+  // 回収待ちにした人・日時（売却済み化やマニュアル登録の操作者）
+  requestedBy    String   @default("")
+  requestedAt    DateTime @default(now())
+  // 回収完了時の回収者・回収日
+  recoveredBy    String   @default("")
+  recoveredAt    DateTime?
+  // 回収した時点で戻した社内保管場所（"4F"/自由入力）。後からマスタの保管場所を変えても当時の戻し先が残る。
+  recoveredLocation String @default("")
+  notes          String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status])
+  @@index([keyBoxNumber])
+}
+
+/// キーボックスの使用履歴（設置・変更・解除・回収）。物件管理画面での番号／解除番号／設置場所の
+/// 変更から自動記録する（入力項目は増やさない）。append-only で、当時の値をそのまま残す。
+model KeyBoxHistory {
+  id            String   @id @default(cuid())
+  keyBoxNumber  String
+  // 設置 / 変更 / 解除 / 回収
+  action        String
+  propertyId    String   @default("")
+  propertyName  String   @default("")
+  setupLocation String   @default("")
+  unlockCode    String   @default("")
+  // 操作した担当者（ログインユーザー名）
+  operator      String   @default("")
+  createdAt     DateTime @default(now())
+
+  @@index([keyBoxNumber])
+}
+
 model Property {
   id               String            @id @default(cuid())
   name             String
   address          String            @default("")
   salesStatus      String            @default("販売中")
+  // 仕入決済前（契約済だが決済前で公開・販売停止）。販売状況から分離した専用フラグ。
+  isAcquisitionPending Boolean        @default(false)
   viewingStatus    String            @default("内見可能")
   // 内見受付開始日（"YYYY-MM-DD"）。未設定(NULL)なら従来どおり日付制限なし。既存物件へは自動設定しない。
   viewingStartDate String?
   isPublished      Boolean           @default(true)
+  // 売却済み（物理削除せず保管）。NULL=未売却。セット時に非公開・一覧除外・新規予約停止。履歴は保持。
+  soldAt           DateTime?
+  soldBy           String            @default("")
   hasKeyBox        String            @default("")
   keyBoxNumber     String            @default("")
   unlockCode       String            @default("")

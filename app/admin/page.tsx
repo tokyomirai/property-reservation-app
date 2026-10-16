@@ -910,13 +910,17 @@ export default function AdminPage() {
                             )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-xs space-x-2 space-y-1">
-                            {res.status === '未承認' && (
+                            {(res.status === '未承認' || res.status === '日時変更') && (
                               <button
                                 onClick={() => handleUpdateStatus(res.id, '承認済')}
                                 disabled={updatingResId !== null}
                                 className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                               >
-                                {updatingResId === res.id ? '処理中...' : '承認・鍵通知'}
+                                {updatingResId === res.id
+                                  ? '処理中...'
+                                  : res.status === '日時変更'
+                                    ? '承認・新日時を通知'
+                                    : '承認・鍵通知'}
                               </button>
                             )}
                             {(res.status === '承認済' || res.status === '日時変更') && (

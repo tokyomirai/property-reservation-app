@@ -244,8 +244,12 @@ export async function PATCH(
     });
 
     if (body.status === '承認済') {
-      // 申込者へ内見確定・鍵情報メールを送信（送信失敗は承認処理自体を止めない）
-      await sendApprovalEmail(reservation, reservation.property);
+      // 申込者へ内見確定・鍵情報メールを送信（送信失敗は承認処理自体を止めない）。
+      // 【重複送信の防止】既に「承認済」のものを再度承認してもメールは再送しない。
+      // 連打・リトライ・二重PATCH が起きても、未承認/他ステータス → 承認済 の初回のみ1通送る。
+      if (existing.status !== '承認済') {
+        await sendApprovalEmail(reservation, reservation.property);
+      }
 
       // ② 確定した内見予約をLINE WORKSカレンダーへ登録（重複登録は行わない）
       if (!reservation.calendarEventId) {

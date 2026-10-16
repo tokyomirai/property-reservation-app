@@ -146,6 +146,9 @@ export default function AdminPage() {
   const [editingProperty, setEditingProperty] = useState<Property | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedReservationForMail, setSelectedReservationForMail] = useState<Reservation | null>(null);
+  // ステータス更新の多重発火を防ぐ（連打・ネットワーク遅延中の二度押しによるメール重複送信の防止）
+  const [updatingResId, setUpdatingResId] = useState<string | null>(null);
+  const updatingRef = useRef(false);
   // 操作履歴モーダルの対象（予約／手動予約）
   const [historyTarget, setHistoryTarget] = useState<{ type: 'reservation' | 'internalBooking'; id: string; title: string } | null>(null);
 
@@ -369,6 +372,10 @@ export default function AdminPage() {
   //   キャンセル … 仲介会社からのキャンセル連絡
   // ※日時変更（時間だけ変更）は社内カレンダーの日時変更フォームから行う。
   const handleUpdateStatus = async (resId: string, status: '承認済' | '却下' | 'キャンセル') => {
+    // 多重発火の防止：処理中は後続のクリックを無視する（ref は再レンダリングを待たず即座に効く）。
+    if (updatingRef.current) return;
+    updatingRef.current = true;
+    setUpdatingResId(resId);
     try {
       const res = await fetch(`/api/reservations/${resId}`, {
         method: 'PATCH',
@@ -389,6 +396,9 @@ export default function AdminPage() {
     } catch (err) {
       console.error(err);
       alert('ステータスの更新に失敗しました。');
+    } finally {
+      updatingRef.current = false;
+      setUpdatingResId(null);
     }
   };
 
@@ -903,9 +913,10 @@ export default function AdminPage() {
                             {res.status === '未承認' && (
                               <button
                                 onClick={() => handleUpdateStatus(res.id, '承認済')}
-                                className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm transition-colors"
+                                disabled={updatingResId !== null}
+                                className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                               >
-                                承認・鍵通知
+                                {updatingResId === res.id ? '処理中...' : '承認・鍵通知'}
                               </button>
                             )}
                             {(res.status === '承認済' || res.status === '日時変更') && (
@@ -921,13 +932,15 @@ export default function AdminPage() {
                               <>
                                 <button
                                   onClick={() => { if (confirm(`仲介会社からのキャンセルとして「キャンセル」にします。\n履歴は残ります。よろしいですか？`)) handleUpdateStatus(res.id, 'キャンセル'); }}
-                                  className="px-2.5 py-1.5 rounded bg-white hover:bg-amber-50 text-amber-700 border border-amber-200 shadow-sm transition-colors font-bold"
+                                  disabled={updatingResId !== null}
+                                  className="px-2.5 py-1.5 rounded bg-white hover:bg-amber-50 text-amber-700 border border-amber-200 shadow-sm transition-colors font-bold disabled:opacity-60 disabled:cursor-not-allowed"
                                 >
                                   キャンセル
                                 </button>
                                 <button
                                   onClick={() => { if (confirm(`弊社都合で受けられないため「却下」にします。\n履歴は残ります。よろしいですか？`)) handleUpdateStatus(res.id, '却下'); }}
-                                  className="px-2.5 py-1.5 rounded bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 shadow-sm transition-colors font-bold"
+                                  disabled={updatingResId !== null}
+                                  className="px-2.5 py-1.5 rounded bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 shadow-sm transition-colors font-bold disabled:opacity-60 disabled:cursor-not-allowed"
                                 >
                                   却下
                                 </button>

@@ -912,7 +912,14 @@ export default function AdminPage() {
                           <td className="px-6 py-4 whitespace-nowrap text-right text-xs space-x-2 space-y-1">
                             {(res.status === '未承認' || res.status === '日時変更') && (
                               <button
-                                onClick={() => handleUpdateStatus(res.id, '承認済')}
+                                onClick={() => {
+                                  const action = res.status === '日時変更'
+                                    ? 'この内見を承認し、申込者へ新しい日時での確定メールを送信します。'
+                                    : 'この内見を承認し、申込者へ鍵情報の確定メールを送信します。';
+                                  if (confirm(`${action}\n\n【${res.propertyName}／${res.companyName} ${res.agentName} 様（${res.preferredDate} ${timeLabel(res)}）】\n\n承認してよろしいですか？`)) {
+                                    handleUpdateStatus(res.id, '承認済');
+                                  }
+                                }}
                                 disabled={updatingResId !== null}
                                 className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                               >

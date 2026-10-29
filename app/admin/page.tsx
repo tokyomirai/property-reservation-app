@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import CalendarTab from './CalendarTab';
 import KeyBoxTab from './KeyBoxTab';
+import ManualTab from './ManualTab';
 import OperationHistoryModal from './OperationHistoryModal';
 import StickyHScroll from './StickyHScroll';
 import { COMPANY_NAME, COMPANY_PHONE, CANCEL_NOTICE_TITLE } from '../../utils/company';
@@ -75,7 +76,7 @@ export default function AdminPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'properties' | 'reservations' | 'calendar' | 'keyboxes'>('properties');
+  const [activeTab, setActiveTab] = useState<'properties' | 'reservations' | 'calendar' | 'keyboxes' | 'manual'>('properties');
 
   // 物件一覧のワード検索（物件名・住所の部分一致）。入力は即時反映しつつ、
   // 描画負荷を抑えるため 200ms の debounce を挟んで絞り込みに用いる。
@@ -511,6 +512,16 @@ export default function AdminPage() {
             }`}
           >
             🔑 キーボックス在庫
+          </button>
+          <button
+            onClick={() => setActiveTab('manual')}
+            className={`px-5 py-4 text-sm font-bold border-b-2 transition-all duration-200 ${
+              activeTab === 'manual'
+                ? 'border-indigo-600 text-indigo-600'
+                : 'border-transparent text-slate-400 hover:text-slate-650'
+            }`}
+          >
+            📖 利用マニュアル
           </button>
 
           {/* 物件管理タブのときのみ、タブ右側に物件名・住所のワード検索窓を表示 */}
@@ -989,6 +1000,9 @@ export default function AdminPage() {
 
         {/* 4. キーボックス在庫タブ */}
         {activeTab === 'keyboxes' && <KeyBoxTab />}
+
+        {/* 5. 利用マニュアルタブ */}
+        {activeTab === 'manual' && <ManualTab />}
 
       </div>
 

@@ -202,3 +202,26 @@ model OperationLog {
 
   @@index([targetType, targetId])
 }
+
+/// 利用マニュアル（社内向け）。1ページ目「社員の操作手順」をMarkdownで保持し、
+/// 管理画面から編集する。単一ドキュメント運用（固定ID "singleton"）。
+/// 2ページ目以降「システム機能説明」はコード側で生成するため、ここには保存しない。
+model ManualDoc {
+  id             String   @id @default("singleton")
+  contentMd      String   // Markdown本文（1ページ目）
+  updatedByName  String   @default("")
+  updatedByEmail String   @default("")
+  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now())
+}
+
+/// マニュアルの編集履歴（世代保存）。保存のたびに1件追加し、誰が・いつ編集したかを残す。
+model ManualRevision {
+  id          String   @id @default(cuid())
+  contentMd   String
+  editorName  String   @default("")
+  editorEmail String   @default("")
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}

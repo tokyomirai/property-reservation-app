@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
+import TimeSelect from '../components/TimeSelect';
 import {
   CATEGORY_COLORS,
   CATEGORY_ORDER,
@@ -670,24 +671,20 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">開始 <span className="text-rose-500">*</span></label>
-                  <input
-                    type="time"
+                  <TimeSelect
                     required
-                    step={900}
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                     value={reschedule.startTime}
-                    onChange={(e) => setReschedule({ ...reschedule, startTime: e.target.value })}
+                    onChange={(v) => setReschedule({ ...reschedule, startTime: v })}
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">終了 <span className="text-rose-500">*</span></label>
-                  <input
-                    type="time"
+                  <TimeSelect
                     required
-                    step={900}
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                     value={reschedule.endTime}
-                    onChange={(e) => setReschedule({ ...reschedule, endTime: e.target.value })}
+                    onChange={(v) => setReschedule({ ...reschedule, endTime: v })}
                   />
                 </div>
               </div>
@@ -853,26 +850,22 @@ export default function CalendarTab({ properties }: { properties: PropertyOption
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
                     開始時間 <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    type="time"
+                  <TimeSelect
                     required
-                    step={900}
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                     value={form.startTime}
-                    onChange={(e) => setForm({ ...form, startTime: e.target.value })}
+                    onChange={(v) => setForm({ ...form, startTime: v })}
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
                     終了時間 <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    type="time"
+                  <TimeSelect
                     required
-                    step={900}
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                     value={form.endTime}
-                    onChange={(e) => setForm({ ...form, endTime: e.target.value })}
+                    onChange={(v) => setForm({ ...form, endTime: v })}
                   />
                 </div>
               </div>

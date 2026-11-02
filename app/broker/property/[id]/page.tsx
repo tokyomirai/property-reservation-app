@@ -3,6 +3,7 @@
 import { useState, useEffect, use, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import TimeSelect from '../../../components/TimeSelect';
 import {
   ALLOWED_CARD_TYPES,
   ALLOWED_CARD_LABEL,
@@ -413,24 +414,20 @@ export default function PropertyDetailPage({ params }: PageProps) {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">開始時間 <span className="text-rose-500">*</span></label>
-                  <input
-                    type="time"
+                  <TimeSelect
                     required
-                    step={900}
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-855 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                     value={formData.startTime}
-                    onChange={e => setFormData({...formData, startTime: e.target.value})}
+                    onChange={v => setFormData({...formData, startTime: v})}
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase mb-1">終了時間 <span className="text-rose-500">*</span></label>
-                  <input
-                    type="time"
+                  <TimeSelect
                     required
-                    step={900}
                     className="w-full bg-slate-50 border border-slate-250 rounded-lg px-3 py-2 text-sm text-slate-855 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
                     value={formData.endTime}
-                    onChange={e => setFormData({...formData, endTime: e.target.value})}
+                    onChange={v => setFormData({...formData, endTime: v})}
                   />
                 </div>
               </div>

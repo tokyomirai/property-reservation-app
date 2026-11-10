@@ -295,7 +295,7 @@ export default function AdminPage() {
 
   // 物件削除処理
   const handleDeleteProperty = async (id: string) => {
-    if (!confirm('この物件を削除しますか？紐づく予約データがある場合はエラーになる可能性があります。')) return;
+    if (!confirm('この物件を削除しますか？\n紐づく内見予約・社内予定もすべて削除され、元に戻せません。')) return;
 
     try {
       const res = await fetch(`/api/properties/${id}`, {

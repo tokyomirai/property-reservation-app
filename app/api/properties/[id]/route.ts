@@ -127,10 +127,23 @@ export async function DELETE(
 
   const { id } = await params;
 
-  try {
-    await prisma.property.delete({ where: { id } });
-    return Response.json({ success: true });
-  } catch {
+  const exists = await prisma.property.findUnique({ where: { id }, select: { id: true } });
+  if (!exists) {
     return Response.json({ error: 'Property not found' }, { status: 404 });
+  }
+
+  // 画面の注意書きどおり「物件・内見履歴ごと完全に消去」する。
+  // Reservation / InternalBooking は外部キーで物件を参照しており（onDelete 未指定）、
+  // 先に消さないと外部キー制約違反で物件を削除できないため、同一トランザクションで消す。
+  try {
+    await prisma.$transaction([
+      prisma.reservation.deleteMany({ where: { propertyId: id } }),
+      prisma.internalBooking.deleteMany({ where: { propertyId: id } }),
+      prisma.property.delete({ where: { id } }),
+    ]);
+    return Response.json({ success: true });
+  } catch (err) {
+    console.error('物件削除に失敗', err);
+    return Response.json({ error: 'Failed to delete property' }, { status: 500 });
   }
 }
